@@ -1,0 +1,14 @@
+# Engine data (created at runtime by CrowDB.Server)
+data/
+
+# .NET build output
+bin/
+obj/
+*.user
+
+# Editors
+.vs/
+.idea/
+
+# macOS
+.DS_Store
