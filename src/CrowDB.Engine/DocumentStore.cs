@@ -19,8 +19,7 @@ public sealed class DocumentStore : IDisposable
     /// <param name="directory">Directory that holds the log file (<c>crowdb.log</c>).</param>
     public DocumentStore(string directory)
     {
-        throw new NotImplementedException(
-            "Step 1: open (or create) the log, replay it, and build the index — see docs/002-step-1-plan.md.");
+        //throw new NotImplementedException("Step 1: open (or create) the log, replay it, and build the index — see docs/002-step-1-plan.md.");
     }
 
     /// <summary>
