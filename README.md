@@ -25,6 +25,7 @@ CrowDB stores JSON documents and retrieves them by id. It is built with .NET, ex
 | `src/CrowDB.Server` | Thin ASP.NET Core Minimal API exposing the engine over HTTP. |
 | `portal/` | Next.js app (npm) for managing documents in the browser. |
 | `tests/CrowDB.Engine.Tests` | xUnit tests; recovery tests are first-class. |
+| `tests/CrowDB.Server.Tests` | API tests — the real server in-process (`WebApplicationFactory`), one throwaway data directory per test. |
 | `docs/` | Design docs and decision records. |
 
 Data lives in `data/` (gitignored) as a single `crowdb.log` file.

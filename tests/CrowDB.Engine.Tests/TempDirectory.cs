@@ -1,0 +1,41 @@
+namespace CrowDB.Engine.Tests;
+
+/// <summary>
+/// A throwaway engine data directory, unique per test: one directory holding
+/// one log file, exactly what the server passes to the engine.
+/// </summary>
+internal sealed class TempDirectory : IDisposable
+{
+    /// <summary>Absolute path of the data directory (created for you).</summary>
+    public string Root { get; }
+
+    /// <summary>Absolute path of the log file inside <see cref="Root"/>.</summary>
+    public string LogFile => Path.Combine(Root, "crowdb.log");
+
+    public TempDirectory()
+    {
+        Root = Path.Combine(Path.GetTempPath(), "crowdb-tests", Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(Root);
+    }
+
+    /// <summary>
+    /// Appends raw bytes to the log without the engine's knowledge — used to
+    /// simulate what a crash mid-write leaves behind.
+    /// </summary>
+    public void AppendRaw(string text) => File.AppendAllText(LogFile, text);
+
+    public void Dispose()
+    {
+        // Best effort: a leaked file handle must not turn one failure into many.
+        try
+        {
+            Directory.Delete(Root, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+}

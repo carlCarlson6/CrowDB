@@ -11,7 +11,8 @@ CrowDB/
 │   ├── CrowDB.Engine/        # storage engine — no web dependencies, ever
 │   └── CrowDB.Server/        # ASP.NET Core Minimal API (thin HTTP layer)
 ├── tests/
-│   └── CrowDB.Engine.Tests/  # xUnit; recovery tests first
+│   ├── CrowDB.Engine.Tests/  # xUnit — each step's contract (agent-written)
+│   └── CrowDB.Server.Tests/  # xUnit — HTTP contract, in-process (agent-written)
 ├── portal/                   # Next.js (App Router, TypeScript, npm)
 ├── docs/                     # design docs / decision records
 └── data/                     # engine data files (gitignored)
@@ -23,13 +24,16 @@ CrowDB/
 2. **Minimum complexity.** No speculative abstraction, no interface with one implementation, no configuration options without a consumer.
 3. **Explain as you go.** Name the database concept in play (tombstone, fsync, compaction...) and keep code readable. If a line can't be explained to a learner, simplify it.
 4. **The engine stays web-free.** `CrowDB.Engine` never references ASP.NET or HTTP; it stores opaque bytes and never deserializes user documents.
-5. **Tests accompany every engine concept**, starting with recovery: write → close → reopen → read, plus torn-tail tolerance.
+5. **The agent writes the tests; the owner implements the engine.** Each step's contract arrives as tests written before the implementation, black-box, and named `GIVEN_<setup>_WHEN_<action>_THEN_<outcome>` — at two levels:
+   - **engine tests** (`tests/CrowDB.Engine.Tests/`) drive `DocumentStore` directly, including recovery and the on-disk format;
+   - **API tests** (`tests/CrowDB.Server.Tests/`) drive the HTTP contract through the real server in-process (`WebApplicationFactory`, one throwaway data directory per test).
+   A step is done when both suites are green — starting with recovery: write → close → reopen → read, plus torn-tail tolerance.
 6. **Decisions are documented options, not silent choices.** For non-trivial design points, present options with tradeoffs — `docs/001-storage-layout-options.md` is the model.
 7. **Standard library first.** New NuGet/npm packages need a concrete justification tied to the current step.
 
 ## Locked decisions (step 1)
 
-- **Stack:** .NET 10, ASP.NET Core Minimal API, `System.Text.Json`. Portal: Next.js App Router + npm. Tests: xUnit.
+- **Stack:** .NET 10, ASP.NET Core Minimal API, `System.Text.Json`. Portal: Next.js App Router + npm. Tests: xUnit; API tests use `Microsoft.AspNetCore.Mvc.Testing` (the official in-process test host) — no other test packages.
 - **API:** `PUT /docs/{id}` (client-chosen string id), `GET /docs/{id}`, `GET /docs` (list ids), `POST /docs` (server-generated Guid id).
 - **Engine surface:** `DocumentStore` with `TryGet(id, out bytes)`, `Put(id, bytes)`, `ListIds()`; documents as `ReadOnlyMemory<byte>`.
 - **Disk format:** record envelope `{"v":1,"id":...,"doc":...}` — documents opaque to the engine, version field from record one. **Record encoding (decided 2026-10-15):** Option A from `docs/001` — append-only JSONL log + in-memory `id → offset` index; all encoding lives behind one `RecordCodec` class; Option C lands in step 4 as a v1→v2 migration.
@@ -42,8 +46,10 @@ CrowDB/
 ## Working protocol
 
 - **Before coding:** restate the goal in one or two sentences and name the concept being introduced.
+- **Tests come first, and the agent writes them.** For every step, extend both suites (engine + API) before the implementation work starts. They are red until the step is correct, and they never test internals a later step will replace.
+- **API tests stay in-process and isolated.** `WebApplicationFactory`, no ports or child processes, one throwaway data directory per test — tests never touch `data/` or each other.
 - **Scope:** keep changes inside a single step; don't refactor unrelated code.
-- **After coding:** `dotnet build` and `dotnet test` must pass; keep engine test coverage meaningful (especially recovery).
+- **After coding:** `dotnet build` passes and the step's tests pass (`dotnet test`); a step is not done while any of its tests fail.
 - **Update this file** when a step completes: move the open item, adjust the current step, record new locked decisions.
 - **Keep `README.md` current.** Its Status section (and the roadmap's *current* marker) must always reflect reality — update them when a step starts or completes, or when a decision is locked.
 - **Portal:** a thin debug console — no auth, localhost only, minimal UI.

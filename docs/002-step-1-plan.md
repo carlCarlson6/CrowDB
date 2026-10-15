@@ -10,24 +10,31 @@
 - `CrowDB.Server` implements the four locked endpoints (§7 of doc 001) against the locked `DocumentStore` surface. It validates that request bodies are JSON and then hands raw bytes to the engine — the engine never parses documents.
 - `portal/` — a Next.js debug console: list ids, open a document, edit and save (`PUT`), create under a server-generated id (`POST`). It reaches the API through a same-origin rewrite (`/api/*` → `http://localhost:5217/*`).
 - `DocumentStore` is a skeleton whose members throw `NotImplementedException`. **That is the work of this step.** The server cannot serve a request until the engine works.
-- `RecoveryTests` and `DocumentStoreTests` hold four skipped tests (recovery, torn tail, round-trip, overwrite). Unskip them as you implement.
+- `tests/CrowDB.Engine.Tests/` and `tests/CrowDB.Server.Tests/` hold the step's contract: engine tests against the locked `DocumentStore` surface, API tests against the real server in-process. They are red today (the store throws) and turn green when the engine is correct — there is nothing to unskip.
 
 ## Build order (suggested — each step ends runnable)
 
 1. **`RecordCodec`** — encode one record and decode it back.
    - Encode: `{"v":1,"id":<escaped id>,"doc":` + raw document bytes + `}\n`, built with `Utf8JsonWriter` and `WriteRawValue` (the document is spliced in, never parsed).
    - Decode: parse the envelope (`JsonDocument`), hand back the id and the raw `doc` bytes.
-   - Test: round-trip a document with newlines, quotes, and unicode; assert byte-for-byte equality.
 2. **`DocumentStore` without recovery** — open/create the log, then:
    - `Put`: encode → append at end → `Flush(true)` (fsync) → `index[id] = offset`.
    - `TryGet`: index lookup → seek → read the record → decode → return the document bytes.
    - `ListIds`: the index's keys.
-   - Test: put, get, overwrite, get again (last write wins).
 3. **Recovery by replay** — in the constructor: scan from offset 0, decode every record in order, set `index[id] = offset` (later records overwrite earlier ones). Clean shutdown and crash now use the same code path.
-   - Test: write → dispose → reopen → read.
-4. **Torn-tail tolerance** — stop replaying at the first unparseable record, log a warning, and keep the store usable.
-   - Test: write two records, close, append garbage to `crowdb.log`, reopen → both records readable, new writes work. (Recovery relies on the *valid-prefix invariant*: complete records, possibly followed by one partial record.)
+4. **Torn-tail tolerance** — stop replaying at the first unparseable record, log a warning, and keep the store usable. Recovery relies on the *valid-prefix invariant*: complete records, possibly followed by one partial record — and the next write must not land *behind* that garbage (truncate it at open, or overwrite it), or the restart after next stops at the garbage and silently drops everything after it. `RecoveryTests` enforces this.
 5. **End-to-end** — run `dotnet run --project src/CrowDB.Server` and `npm run dev` in `portal/`, then `cat data/crowdb.log` — that is the Option A payoff.
+
+## The contract (already written — `tests/CrowDB.Engine.Tests/` + `tests/CrowDB.Server.Tests/`)
+
+Black-box at both levels; every test is named `GIVEN_..._WHEN_..._THEN_...`. The suites are red until the engine works — make them green in the order above.
+
+| File | Covers |
+|---|---|
+| `DocumentStoreTests` (engine) | point lookups, byte-for-byte round-trip (tricky content, 1 MB document), awkward ids, last-write-wins, listing |
+| `RecoveryTests` (engine) | reopen → read, replay order, torn-tail tolerance — including that a torn tail must not poison writes that follow it |
+| `DiskFormatTests` (engine) | the on-disk contract: one `crowdb.log`, one `v:1` envelope per line, append-only (dead records stay), replay of a hand-written log |
+| `DocsApiTests` (API) | the HTTP contract: 201/204/400/404, verbatim bytes over the wire, url-encoded ids, and a restart serving a log left behind by a previous run |
 
 ## Decisions you will meet (and where each one bites)
 
@@ -40,7 +47,7 @@
 
 ## Done when
 
-- `dotnet build` and `dotnet test` pass, with recovery, torn-tail, round-trip, and overwrite tests actually running (not skipped).
+- `dotnet build` and `dotnet test` pass — the whole step-1 suite green (it is the contract, and it is red until the engine works).
 - `curl` and the portal can PUT, GET, POST, and list; data survives a server restart (the index is rebuilt, not persisted).
 - `AGENTS.md` and `README.md` status sections are updated.
 

@@ -19,3 +19,7 @@ var app = builder.Build();
 app.MapCrowDbEndpoints(store);
 
 app.Run();
+
+// The API tests (tests/CrowDB.Server.Tests) boot this program in-process with
+// WebApplicationFactory<Program>, which needs the entry point to be public.
+public partial class Program { }
