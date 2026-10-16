@@ -116,4 +116,86 @@ public class RecoveryTests(ITestOutputHelper output)
             Assert.Equal(Bytes("""{"name":"Linus"}"""), Read(reopened, "user:3"));
         }
     }
+
+    [Fact]
+    public void GIVEN_a_deleted_document_WHEN_reopening_THEN_it_stays_deleted()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put("user:1", Bytes("""{"name":"Ada"}"""));
+            store.Put("user:2", Bytes("""{"name":"Grace"}"""));
+            store.Delete("user:1");
+        }
+
+        using (var reopened = OpenStore(temp.LogFile, output))
+        {
+            Assert.False(reopened.TryGet("user:1", out _));
+            Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(reopened, "user:2"));
+            Assert.Equal(new[] { "user:2" }, reopened.ListIds());
+        }
+    }
+
+    [Fact]
+    public void GIVEN_a_deleted_then_re_put_document_WHEN_reopening_THEN_the_newer_document_is_back()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put("user:1", Bytes("""{"version":1}"""));
+            store.Delete("user:1");
+            store.Put("user:1", Bytes("""{"version":2}"""));
+        }
+
+        using (var reopened = OpenStore(temp.LogFile, output))
+        {
+            // The newest record for the id is a put — replay resurrects it.
+            Assert.Equal(Bytes("""{"version":2}"""), Read(reopened, "user:1"));
+            Assert.Contains("user:1", reopened.ListIds());
+        }
+    }
+
+    [Fact]
+    public void GIVEN_a_torn_tombstone_tail_WHEN_reopening_THEN_the_document_is_still_readable()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put("user:1", Bytes("""{"name":"Ada"}"""));
+        }
+
+        // A crash mid-delete: the tombstone never completed. The valid-prefix
+        // rule is unchanged — an unparseable tombstone must not delete anything.
+        temp.AppendRaw(Bytes("\n" + """{"Version":"1","Id":"user:1","Doc":nul"""));
+
+        using (var reopened = OpenStore(temp.LogFile, output))
+        {
+            Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
+            Assert.Contains("user:1", reopened.ListIds());
+        }
+    }
+
+    [Fact]
+    public void GIVEN_an_id_with_a_newline_WHEN_deleting_and_reopening_THEN_the_id_stays_deleted()
+    {
+        const string id = "line\nbreak";
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put(id, Bytes("""{"ok":true}"""));
+            store.Delete(id);
+        }
+
+        // The tombstone's id is escaped into its envelope like any other record:
+        // the newline must never split it into two unparseable lines.
+        using (var reopened = OpenStore(temp.LogFile, output))
+        {
+            Assert.False(reopened.TryGet(id, out _));
+            Assert.Empty(reopened.ListIds());
+        }
+    }
 }

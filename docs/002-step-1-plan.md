@@ -29,12 +29,12 @@
 
 Black-box at both levels; every test is named `GIVEN_..._WHEN_..._THEN_...`. The suites are red until the engine works — make them green in the order above.
 
-| File | Covers |
-|---|---|
-| `DocumentStoreTests` (engine) | point lookups, byte-for-byte round-trip (tricky content, 1 MB document), awkward ids, last-write-wins, listing |
-| `RecoveryTests` (engine) | reopen → read, replay order, torn-tail tolerance — including that a torn tail must not poison writes that follow it |
-| `DiskFormatTests` (engine) | the on-disk contract: one `crowdb.log`, one `v:1` envelope per line, append-only (dead records stay), replay of a hand-written log |
-| `DocsApiTests` (API) | the HTTP contract: 201/204/400/404, verbatim bytes over the wire, url-encoded ids, and a restart serving a log left behind by a previous run |
+| File                          | Covers                                                                                                                                       |
+|-------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
+| `DocumentStoreTests` (engine) | point lookups, byte-for-byte round-trip (tricky content, 1 MB document), awkward ids, last-write-wins, listing                               |
+| `RecoveryTests` (engine)      | reopen → read, replay order, torn-tail tolerance — including that a torn tail must not poison writes that follow it                          |
+| `DiskFormatTests` (engine)    | the on-disk contract: one `crowdb.log`, one `v:1` envelope per line, append-only (dead records stay), replay of a hand-written log           |
+| `DocsApiTests` (API)          | the HTTP contract: 201/204/400/404, verbatim bytes over the wire, url-encoded ids, and a restart serving a log left behind by a previous run |
 
 ## Decisions you will meet (and where each one bites)
 

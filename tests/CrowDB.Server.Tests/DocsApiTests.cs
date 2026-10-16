@@ -7,10 +7,10 @@ using static CrowDB.Server.Tests.ApiTestSupport;
 namespace CrowDB.Server.Tests;
 
 /// <summary>
-/// The HTTP contract of CrowDB.Server: the four locked endpoints (docs/001 §7),
-/// their status codes, and the fact that documents travel as raw bytes. The
-/// server is the real thing running in-process; only the data directory is
-/// temporary.
+/// The HTTP contract of CrowDB.Server: the locked endpoints (docs/001 §7, plus
+/// the DELETE added in docs/003), their status codes, and the fact that
+/// documents travel as raw bytes. The server is the real thing running
+/// in-process; only the data directory is temporary.
 /// </summary>
 public class DocsApiTests(ITestOutputHelper output)
 {
@@ -156,5 +156,82 @@ public class DocsApiTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
         Assert.Equal("""{"name":"Ada"}""", await get.Content.ReadAsStringAsync());
         Assert.Equal(new[] { "user:1" }, await ListIds(client));
+    }
+
+    [Fact]
+    public async Task GIVEN_a_stored_document_WHEN_deleting_it_THEN_204_comes_back_and_it_is_gone_everywhere()
+    {
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+        await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
+
+        var delete = await client.DeleteAsync(DocUrl("user:1"));
+        Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(DocUrl("user:1"))).StatusCode);
+        Assert.DoesNotContain("user:1", await ListIds(client));
+    }
+
+    [Fact]
+    public async Task GIVEN_an_unknown_id_WHEN_deleting_it_THEN_the_response_is_404()
+    {
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+
+        var response = await client.DeleteAsync(DocUrl("missing"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GIVEN_a_deleted_document_WHEN_deleting_it_again_THEN_the_response_is_404()
+    {
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+        await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(DocUrl("user:1"))).StatusCode);
+
+        var second = await client.DeleteAsync(DocUrl("user:1"));
+
+        Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task GIVEN_a_deleted_id_WHEN_putting_it_again_THEN_it_is_stored_again()
+    {
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+        await client.PutAsync(DocUrl("user:1"), Json("""{"version":1}"""));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(DocUrl("user:1"))).StatusCode);
+
+        var put = await client.PutAsync(DocUrl("user:1"), Json("""{"version":2}"""));
+
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+        var get = await client.GetAsync(DocUrl("user:1"));
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+        Assert.Equal("""{"version":2}""", await get.Content.ReadAsStringAsync());
+        Assert.Contains("user:1", await ListIds(client));
+    }
+
+    [Fact]
+    public async Task GIVEN_a_log_with_a_tombstone_from_a_previous_run_WHEN_the_server_starts_THEN_the_id_stays_deleted()
+    {
+        using var server = new CrowDbServer(output);
+
+        // The on-disk format is the contract (docs/003 §3): a previous process
+        // can leave a tombstoned log behind, and a restart must serve it that way.
+        await File.WriteAllTextAsync(server.LogFile, string.Join('\n', new[]
+        {
+            """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
+            """{"Version":"1","Id":"user:1","Doc":null}""",
+            """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
+        }) + "\n");
+
+        using var client = server.CreateClient();
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(DocUrl("user:1"))).StatusCode);
+        var grace = await client.GetAsync(DocUrl("user:2"));
+        Assert.Equal("""{"name":"Grace"}""", await grace.Content.ReadAsStringAsync());
+        Assert.Equal(new[] { "user:2" }, await ListIds(client));
     }
 }

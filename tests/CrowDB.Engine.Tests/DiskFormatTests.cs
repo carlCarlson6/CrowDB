@@ -76,4 +76,63 @@ public class DiskFormatTests(ITestOutputHelper output)
         Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(store, "user:2"));
         Assert.Equal(2, store.ListIds().Count);
     }
+
+    [Fact]
+    public void GIVEN_a_delete_WHEN_inspecting_the_log_THEN_a_tombstone_line_is_appended_and_nothing_is_erased()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put("user:1", Bytes("""{"name":"Ada"}"""));
+            store.Delete("user:1");
+        }
+
+        var lines = File.ReadAllLines(temp.LogFile);
+        Assert.Equal(2, lines.Length);
+
+        // The dead put stays byte-for-byte — appends never modify old bytes.
+        using var put = JsonDocument.Parse(lines[0]);
+        Assert.Contains("Ada", put.RootElement.GetProperty("Doc").GetString());
+
+        // The tombstone is an envelope whose Doc is JSON null (docs/003 §3).
+        using var tombstone = JsonDocument.Parse(lines[1]);
+        Assert.Equal("1", tombstone.RootElement.GetProperty("Version").ToString());
+        Assert.Equal("user:1", tombstone.RootElement.GetProperty("Id").GetString());
+        Assert.Equal(JsonValueKind.Null, tombstone.RootElement.GetProperty("Doc").ValueKind);
+    }
+
+    [Fact]
+    public void GIVEN_a_delete_of_an_unknown_id_WHEN_inspecting_the_log_THEN_nothing_is_appended()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Delete("missing");
+        }
+
+        Assert.Equal(0, new FileInfo(temp.LogFile).Length);
+    }
+
+    [Fact]
+    public void GIVEN_a_hand_written_log_with_a_tombstone_WHEN_opening_THEN_the_id_is_absent_and_replay_continues()
+    {
+        using var temp = new TempDirectory();
+
+        // Same reader rules as the hand-written-log test above: whitespace and
+        // member order are not significant; a null Doc is the tombstone.
+        File.WriteAllText(temp.LogFile, string.Join('\n', new[]
+        {
+            """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
+            """{ "Doc":null, "Id":"user:1", "Version":"1" }""",
+            """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
+        }) + "\n");
+
+        using var store = OpenStore(temp.LogFile, output);
+
+        Assert.False(store.TryGet("user:1", out _));
+        Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(store, "user:2"));
+        Assert.Equal(new[] { "user:2" }, store.ListIds());
+    }
 }

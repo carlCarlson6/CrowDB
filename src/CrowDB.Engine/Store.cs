@@ -55,4 +55,9 @@ public sealed class Store : IDisposable
         _logFileStream.Close();
         _logFileStream.Dispose();
     }
+
+    public bool Delete(string user)
+    {
+        throw new NotImplementedException();
+    }
 }
