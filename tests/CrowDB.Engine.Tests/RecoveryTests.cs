@@ -79,7 +79,7 @@ public class RecoveryTests(ITestOutputHelper output)
         }
 
         // A crash mid-append leaves a partial record — and only ever at the tail.
-        temp.AppendRaw("""{"v":1,"id":"user:3","doc":{"name":"torn""");
+        temp.AppendRaw(Bytes("\n"+"""{"v":1,"id":"user:3","doc":{"name":"torn"""));
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -99,7 +99,7 @@ public class RecoveryTests(ITestOutputHelper output)
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
-        temp.AppendRaw("""{"v":1,"id":"user:2","doc":{"name":"torn""");
+        temp.AppendRaw(Bytes("\n"+"""{"v":1,"id":"user:2","doc":{"name":"torn\n"""));
 
         using (var store = OpenStore(temp.LogFile, output))
         {

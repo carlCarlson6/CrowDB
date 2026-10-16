@@ -1,3 +1,4 @@
+using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace CrowDB.Engine;
@@ -36,12 +37,13 @@ public sealed class Store : IDisposable
         
         _logger.LogInformation("STORE.PUT - {doc}", record.ToString());
         
-        var offset = _logFileStream.Length;
-        
         lock (_logFileStream)
         {
+            _logFileStream.Seek(0, SeekOrigin.End);
+            if (_logFileStream.Length > 0) _logFileStream.Write("\n"u8);
+            var offset = _logFileStream.Position;
             _logFileStream.Write(record.Encode());
-            _logFileStream.Flush();
+            _logFileStream.Flush(true);
             _idsIndex[id] = offset;
         }
     }

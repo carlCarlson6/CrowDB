@@ -25,7 +25,7 @@ internal sealed class TempDirectory : IDisposable
     /// Appends raw bytes to the log without the engine's knowledge — used to
     /// simulate what a crash mid-write leaves behind.
     /// </summary>
-    public void AppendRaw(string text) => File.AppendAllText(LogFile, text);
+    public void AppendRaw(byte[] text) => File.AppendAllBytes(LogFile, text);
 
     public void Dispose()
     {
