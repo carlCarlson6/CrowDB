@@ -37,6 +37,8 @@ dotnet run --project src/CrowDB.Server    # API on http://localhost:5217
 cd portal && npm install && npm run dev   # portal on http://localhost:3000
 ```
 
+The server logs what the store does to the console (`info: CrowDB.Engine.Store`). Failing tests show the same engine logs in their output.
+
 The server needs the step-1 engine implemented before it can serve requests — `DocumentStore` is currently a skeleton whose members throw. Build order and test list: [002 — Step 1 plan](docs/002-step-1-plan.md).
 
 ## Roadmap (one concept per step)

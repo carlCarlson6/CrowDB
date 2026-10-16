@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Xunit.Abstractions;
 using static CrowDB.Server.Tests.ApiTestSupport;
 
 namespace CrowDB.Server.Tests;
@@ -10,12 +11,12 @@ namespace CrowDB.Server.Tests;
 /// server is the real thing running in-process; only the data directory is
 /// temporary.
 /// </summary>
-public class DocsApiTests
+public class DocsApiTests(ITestOutputHelper output)
 {
     [Fact]
     public async Task GIVEN_an_empty_server_WHEN_listing_documents_THEN_the_response_is_an_empty_json_array()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         var response = await client.GetAsync("/docs");
@@ -27,7 +28,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_a_put_document_WHEN_getting_it_THEN_the_bytes_come_back_verbatim()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
         const string document = """{"name":"Ada","tags":["math","navy"],"note":"ü é 🚀"}""";
 
@@ -43,7 +44,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_a_put_document_WHEN_putting_a_newer_one_THEN_the_newest_wins()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         await client.PutAsync(DocUrl("user:1"), Json("""{"version":1}"""));
@@ -57,7 +58,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_two_documents_WHEN_listing_THEN_both_ids_are_returned()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
@@ -71,7 +72,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_a_posted_document_WHEN_reading_the_response_THEN_a_generated_id_and_location_come_back()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         var response = await client.PostAsync("/docs", Json("""{"name":"generated"}"""));
@@ -91,7 +92,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_an_unknown_id_WHEN_getting_it_THEN_the_response_is_404()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         var response = await client.GetAsync(DocUrl("missing"));
@@ -102,7 +103,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_a_body_that_is_not_json_WHEN_putting_THEN_the_response_is_400_and_nothing_is_stored()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         var response = await client.PutAsync(DocUrl("user:1"), Json("not json at all"));
@@ -115,7 +116,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_an_empty_body_WHEN_posting_THEN_the_response_is_400()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
         var response = await client.PostAsync("/docs", new StringContent(""));
@@ -126,7 +127,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_an_id_that_needs_url_encoding_WHEN_round_tripping_THEN_the_id_survives_exactly()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
         const string id = "ünïcode id:🌍";
 
@@ -141,7 +142,7 @@ public class DocsApiTests
     [Fact]
     public async Task GIVEN_a_log_from_a_previous_run_WHEN_the_server_starts_THEN_the_documents_are_readable()
     {
-        using var server = new CrowDbServer();
+        using var server = new CrowDbServer(output);
 
         // The on-disk format is the contract (docs/001 §3): a previous process
         // can leave a valid log behind, and a restart must serve it.

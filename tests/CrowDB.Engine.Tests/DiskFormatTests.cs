@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Xunit.Abstractions;
 using static CrowDB.Engine.Tests.TestSupport;
 
 namespace CrowDB.Engine.Tests;
@@ -8,14 +9,14 @@ namespace CrowDB.Engine.Tests;
 /// envelope per line, old bytes never modified — appends only. The log is the
 /// source of truth, so these tests read it directly.
 /// </summary>
-public class DiskFormatTests
+public class DiskFormatTests(ITestOutputHelper output)
 {
     [Fact]
     public void GIVEN_two_puts_WHEN_inspecting_the_log_THEN_each_record_is_one_v1_envelope_line()
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
@@ -40,7 +41,7 @@ public class DiskFormatTests
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"version":1}"""));
             store.Put("user:1", Bytes("""{"version":2}"""));
@@ -51,7 +52,7 @@ public class DiskFormatTests
         Assert.Contains("""{"version":1}""", log, StringComparison.Ordinal); // dead, never modified
         Assert.Contains("""{"version":2}""", log, StringComparison.Ordinal); // appended after it
 
-        using var reopened = new DocumentStore(temp.Root);
+        using var reopened = OpenStore(temp.Root, output);
         Assert.Equal(Bytes("""{"version":2}"""), Read(reopened, "user:1"));
     }
 
@@ -69,7 +70,7 @@ public class DiskFormatTests
             """{"doc":{"name":"Ada Lovelace"},"id":"user:1","v":1}""",
         }) + "\n");
 
-        using var store = new DocumentStore(temp.Root);
+        using var store = OpenStore(temp.Root, output);
 
         Assert.Equal(Bytes("""{"name":"Ada Lovelace"}"""), Read(store, "user:1")); // last write wins
         Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(store, "user:2"));

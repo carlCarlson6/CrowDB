@@ -14,7 +14,7 @@ internal sealed class TempDirectory : IDisposable
 
     public TempDirectory()
     {
-        Root = Path.Combine(Path.GetTempPath(), "crowdb-tests", Guid.NewGuid().ToString("n"));
+        Root = Path.Combine(Path.GetTempPath(), "crowdb-tests");
         Directory.CreateDirectory(Root);
     }
 

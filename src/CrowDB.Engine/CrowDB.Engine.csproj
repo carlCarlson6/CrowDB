@@ -6,4 +6,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- The engine logs through ILogger<Store>. Microsoft.Extensions.Logging.Abstractions
+       is the interface-only logging contract (no console, no web), so the engine
+       stays web-free and whoever hosts it picks the provider. It is the engine's
+       only dependency. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,5 @@
 using CrowDB.Engine;
+using Xunit.Abstractions;
 using static CrowDB.Engine.Tests.TestSupport;
 
 namespace CrowDB.Engine.Tests;
@@ -9,19 +10,19 @@ namespace CrowDB.Engine.Tests;
 /// directory — whatever the store knew in RAM is thrown away, and recovery
 /// must rebuild it by replaying the log.
 /// </summary>
-public class RecoveryTests
+public class RecoveryTests(ITestOutputHelper output)
 {
     [Fact]
     public void GIVEN_a_stored_document_WHEN_the_store_is_reopened_THEN_the_document_survives()
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
-        using (var reopened = new DocumentStore(temp.Root))
+        using (var reopened = OpenStore(temp.Root, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
         }
@@ -32,14 +33,14 @@ public class RecoveryTests
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
             store.Put("user:3", Bytes("""{"name":"Linus"}"""));
         }
 
-        using (var reopened = new DocumentStore(temp.Root))
+        using (var reopened = OpenStore(temp.Root, output))
         {
             Assert.Equal(3, reopened.ListIds().Count);
             Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(reopened, "user:2"));
@@ -51,14 +52,14 @@ public class RecoveryTests
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"version":1}"""));
             store.Put("user:1", Bytes("""{"version":2}"""));
             store.Put("user:1", Bytes("""{"version":3}"""));
         }
 
-        using (var reopened = new DocumentStore(temp.Root))
+        using (var reopened = OpenStore(temp.Root, output))
         {
             // Replay applies records in log order, so the newest record wins.
             Assert.Equal(Bytes("""{"version":3}"""), Read(reopened, "user:1"));
@@ -71,7 +72,7 @@ public class RecoveryTests
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
@@ -80,7 +81,7 @@ public class RecoveryTests
         // A crash mid-append leaves a partial record — and only ever at the tail.
         temp.AppendRaw("""{"v":1,"id":"user:3","doc":{"name":"torn""");
 
-        using (var reopened = new DocumentStore(temp.Root))
+        using (var reopened = OpenStore(temp.Root, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
             Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(reopened, "user:2"));
@@ -93,14 +94,14 @@ public class RecoveryTests
     {
         using var temp = new TempDirectory();
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
         temp.AppendRaw("""{"v":1,"id":"user:2","doc":{"name":"torn""");
 
-        using (var store = new DocumentStore(temp.Root))
+        using (var store = OpenStore(temp.Root, output))
         {
             store.Put("user:3", Bytes("""{"name":"Linus"}"""));
         }
@@ -109,7 +110,7 @@ public class RecoveryTests
         // "valid prefix, then at most one partial record", so the store must
         // either truncate the tail at open or overwrite it — never append
         // behind the garbage, or this write would be skipped on the next replay.
-        using (var reopened = new DocumentStore(temp.Root))
+        using (var reopened = OpenStore(temp.Root, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
             Assert.Equal(Bytes("""{"name":"Linus"}"""), Read(reopened, "user:3"));

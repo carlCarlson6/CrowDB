@@ -35,7 +35,8 @@ CrowDB/
 
 - **Stack:** .NET 10, ASP.NET Core Minimal API, `System.Text.Json`. Portal: Next.js App Router + npm. Tests: xUnit; API tests use `Microsoft.AspNetCore.Mvc.Testing` (the official in-process test host) — no other test packages.
 - **API:** `PUT /docs/{id}` (client-chosen string id), `GET /docs/{id}`, `GET /docs` (list ids), `POST /docs` (server-generated Guid id).
-- **Engine surface:** `DocumentStore` with `TryGet(id, out bytes)`, `Put(id, bytes)`, `ListIds()`; documents as `ReadOnlyMemory<byte>`.
+- **Engine surface:** `DocumentStore` with `TryGet(id, out bytes)`, `Put(id, bytes)`, `ListIds()`; documents as `ReadOnlyMemory<byte>`. The constructor takes the data directory and an `ILogger<Store>`.
+- **Logging:** the engine depends on `Microsoft.Extensions.Logging.Abstractions` only (interface-only contract, keeps the engine web-free) — its sole package. The server hands the store the host's logger (console in development; levels in `appsettings*.json`); both test suites hand it a logger that writes into the failing test's output, so a red test shows what the store was doing.
 - **Disk format:** record envelope `{"v":1,"id":...,"doc":...}` — documents opaque to the engine, version field from record one. **Record encoding (decided 2026-10-15):** Option A from `docs/001` — append-only JSONL log + in-memory `id → offset` index; all encoding lives behind one `RecordCodec` class; Option C lands in step 4 as a v1→v2 migration.
 - **Durability:** fsync (`Flush(true)`) per write for now (group commit is step 7).
 - **Concurrency:** one lock around the read/write path for now (lock-free reads are step 6).

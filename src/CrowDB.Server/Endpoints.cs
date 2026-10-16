@@ -4,14 +4,14 @@ using CrowDB.Engine;
 namespace CrowDB.Server;
 
 /// <summary>
-/// The HTTP surface: five routes over one <see cref="DocumentStore"/>.
+/// The HTTP surface: five routes over one <see cref="Store"/>.
 /// Routers stay dumb — they translate HTTP to engine calls and back, and never
 /// touch the log themselves.
 /// </summary>
 public static class Endpoints
 {
     /// <summary>Maps every route the server exposes.</summary>
-    public static void MapCrowDbEndpoints(this WebApplication app, DocumentStore store)
+    public static void MapCrowDbEndpoints(this WebApplication app, Store store)
     {
         // A root route so that http://localhost:5217/ is not a 404.
         app.MapGet("/", () => "CrowDB.Server is running. The API lives under /docs.");
