@@ -7,14 +7,17 @@ namespace CrowDB.Engine.Tests;
 internal sealed class TempDirectory : IDisposable
 {
     /// <summary>Absolute path of the data directory (created for you).</summary>
-    public string Root { get; }
+    private string Root { get; }
 
     /// <summary>Absolute path of the log file inside <see cref="Root"/>.</summary>
-    public string LogFile => Path.Combine(Root, "crowdb.log");
+    public string LogFile 
+    {
+        get => Path.Combine(Root, field);
+    } = "crowdb.log";
 
     public TempDirectory()
     {
-        Root = Path.Combine(Path.GetTempPath(), "crowdb-tests");
+        Root = Path.Combine(Path.GetTempPath(), $"crowdb-tests_{Guid.NewGuid()}");
         Directory.CreateDirectory(Root);
     }
 

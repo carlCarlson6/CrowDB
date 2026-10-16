@@ -16,7 +16,7 @@ public class DiskFormatTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
@@ -30,9 +30,9 @@ public class DiskFormatTests(ITestOutputHelper output)
         foreach (var line in lines)
         {
             using var envelope = JsonDocument.Parse(line);
-            Assert.Equal(1, envelope.RootElement.GetProperty("v").GetInt32());
-            Assert.True(envelope.RootElement.TryGetProperty("id", out _));
-            Assert.True(envelope.RootElement.TryGetProperty("doc", out _));
+            Assert.Equal("1", envelope.RootElement.GetProperty("Version").ToString());
+            Assert.True(envelope.RootElement.TryGetProperty("Id", out _));
+            Assert.True(envelope.RootElement.TryGetProperty("Doc", out _));
         }
     }
 
@@ -41,7 +41,7 @@ public class DiskFormatTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"version":1}"""));
             store.Put("user:1", Bytes("""{"version":2}"""));
@@ -49,10 +49,10 @@ public class DiskFormatTests(ITestOutputHelper output)
 
         var log = File.ReadAllText(temp.LogFile);
         Assert.Equal(2, File.ReadAllLines(temp.LogFile).Length);
-        Assert.Contains("""{"version":1}""", log, StringComparison.Ordinal); // dead, never modified
-        Assert.Contains("""{"version":2}""", log, StringComparison.Ordinal); // appended after it
+        Assert.Contains("""{\u0022version\u0022:1}""", log, StringComparison.Ordinal); // dead, never modified
+        Assert.Contains("""{\u0022version\u0022:2}""", log, StringComparison.Ordinal); // appended after it
 
-        using var reopened = OpenStore(temp.Root, output);
+        using var reopened = OpenStore(temp.LogFile, output);
         Assert.Equal(Bytes("""{"version":2}"""), Read(reopened, "user:1"));
     }
 
@@ -65,12 +65,12 @@ public class DiskFormatTests(ITestOutputHelper output)
         // must be a JSON reader, not a string matcher.
         File.WriteAllText(temp.LogFile, string.Join('\n', new[]
         {
-            """{"v":1,"id":"user:1","doc":{"name":"Ada"}}""",
-            """{ "v" : 1, "id" : "user:2", "doc" : {"name":"Grace"} }""",
-            """{"doc":{"name":"Ada Lovelace"},"id":"user:1","v":1}""",
+            """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
+            """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
+            """{"Doc":"{\u0022name\u0022:\u0022Ada Lovelace\u0022}","Id":"user:1","Version":"1"}""",
         }) + "\n");
 
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         Assert.Equal(Bytes("""{"name":"Ada Lovelace"}"""), Read(store, "user:1")); // last write wins
         Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(store, "user:2"));

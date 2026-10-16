@@ -1,3 +1,5 @@
+using System.Net.Mime;
+using System.Text;
 using CrowDB.Engine;
 using Xunit.Abstractions;
 using static CrowDB.Engine.Tests.TestSupport;
@@ -16,7 +18,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_an_empty_store_WHEN_looking_up_an_unknown_id_THEN_TryGet_returns_false()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         Assert.False(store.TryGet("missing", out _));
     }
@@ -25,12 +27,12 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_a_put_document_WHEN_reading_it_back_THEN_the_exact_bytes_are_returned()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
         var expected = Bytes("""{"name":"Ada","born":1815}""");
 
         store.Put("user:1", expected);
-
         var actual = Read(store, "user:1");
+
         Assert.Equal(expected, actual);
     }
 
@@ -43,7 +45,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_tricky_document_content_WHEN_round_tripping_THEN_the_bytes_match(string json)
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         store.Put("tricky", Bytes(json));
 
@@ -61,7 +63,7 @@ public class StoreTests(ITestOutputHelper output)
         // Ids are escaped into the envelope: a newline inside an id must never
         // split one record across two lines.
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         store.Put(id, Bytes("""{"ok":true}"""));
 
@@ -73,7 +75,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_an_existing_document_WHEN_putting_a_newer_one_THEN_the_newest_wins()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         store.Put("user:1", Bytes("""{"version":1}"""));
         store.Put("user:1", Bytes("""{"version":2}"""));
@@ -85,7 +87,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_two_documents_WHEN_overwriting_one_THEN_the_other_is_untouched()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         store.Put("user:2", Bytes("""{"name":"Grace"}"""));
@@ -98,7 +100,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_ids_differing_only_by_case_WHEN_round_tripping_THEN_they_stay_distinct()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         store.Put("user:1", Bytes("""{"name":"lower"}"""));
         store.Put("User:1", Bytes("""{"name":"upper"}"""));
@@ -113,7 +115,7 @@ public class StoreTests(ITestOutputHelper output)
     {
         // Big enough to break any fixed-size read buffer.
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         var large = Bytes($$"""{"payload":"{{new string('x', 1_000_000)}}"}""");
         var small = Bytes("""{"small":true}""");
@@ -129,7 +131,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_an_empty_store_WHEN_listing_ids_THEN_the_list_is_empty()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         Assert.Empty(store.ListIds());
     }
@@ -138,7 +140,7 @@ public class StoreTests(ITestOutputHelper output)
     public void GIVEN_twenty_documents_WHEN_listing_ids_THEN_every_id_appears_exactly_once()
     {
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.Root, output);
+        using var store = OpenStore(temp.LogFile, output);
 
         for (var i = 0; i < 20; i++)
         {

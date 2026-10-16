@@ -17,12 +17,12 @@ public class RecoveryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
-        using (var reopened = OpenStore(temp.Root, output))
+        using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
         }
@@ -33,14 +33,14 @@ public class RecoveryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
             store.Put("user:3", Bytes("""{"name":"Linus"}"""));
         }
 
-        using (var reopened = OpenStore(temp.Root, output))
+        using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.Equal(3, reopened.ListIds().Count);
             Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(reopened, "user:2"));
@@ -52,14 +52,14 @@ public class RecoveryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"version":1}"""));
             store.Put("user:1", Bytes("""{"version":2}"""));
             store.Put("user:1", Bytes("""{"version":3}"""));
         }
 
-        using (var reopened = OpenStore(temp.Root, output))
+        using (var reopened = OpenStore(temp.LogFile, output))
         {
             // Replay applies records in log order, so the newest record wins.
             Assert.Equal(Bytes("""{"version":3}"""), Read(reopened, "user:1"));
@@ -72,7 +72,7 @@ public class RecoveryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
@@ -81,7 +81,7 @@ public class RecoveryTests(ITestOutputHelper output)
         // A crash mid-append leaves a partial record — and only ever at the tail.
         temp.AppendRaw("""{"v":1,"id":"user:3","doc":{"name":"torn""");
 
-        using (var reopened = OpenStore(temp.Root, output))
+        using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
             Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(reopened, "user:2"));
@@ -94,14 +94,14 @@ public class RecoveryTests(ITestOutputHelper output)
     {
         using var temp = new TempDirectory();
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
         temp.AppendRaw("""{"v":1,"id":"user:2","doc":{"name":"torn""");
 
-        using (var store = OpenStore(temp.Root, output))
+        using (var store = OpenStore(temp.LogFile, output))
         {
             store.Put("user:3", Bytes("""{"name":"Linus"}"""));
         }
@@ -110,7 +110,7 @@ public class RecoveryTests(ITestOutputHelper output)
         // "valid prefix, then at most one partial record", so the store must
         // either truncate the tail at open or overwrite it — never append
         // behind the garbage, or this write would be skipped on the next replay.
-        using (var reopened = OpenStore(temp.Root, output))
+        using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
             Assert.Equal(Bytes("""{"name":"Linus"}"""), Read(reopened, "user:3"));
