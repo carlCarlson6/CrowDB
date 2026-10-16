@@ -42,7 +42,7 @@ CrowDB/
 - **Concurrency:** the append path takes the store lock for now (lock-free reads are step 6). **As built, reads don't take it** — see Open above.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 2 — deletes → tombstones, tests first (the decision doc and the red contract land together). Also open from step 1: only `Put` takes the store lock — `TryGet`/`ListIds` read the shared file handle and index unguarded, so concurrent requests can race; fix it alongside one of the next steps.
+**Open:** step 2 — deletes → tombstones; the contract is in both suites and red until `Delete` is implemented per `docs/003-step-2-tombstones.md` (engine: tombstone write + replay handling; server: `DELETE /docs/{id}`). Also open from step 1: only `Put` takes the store lock — `TryGet`/`ListIds` read the shared file handle and index unguarded, so concurrent requests can race; fix it alongside one of the next steps.
 
 ## Working protocol
 
@@ -58,7 +58,7 @@ CrowDB/
 ## Roadmap (what "next" means)
 
 1. **POC** — append-only log + id index; store/read/list by id; minimal API; minimal portal. *(done — Option A as built, suites green)*
-2. Deletes → tombstones (why logs can't just forget). *(current — tests first)*
+2. Deletes → tombstones (why logs can't just forget). *(current — contract written, implementation next)*
 3. Compaction → atomic rename; space reclamation; first concurrency questions.
 4. Binary format v2 + CRC32 → framing, integrity, format migration.
 5. On-disk sorted index → range scans; dense vs sparse index choices.

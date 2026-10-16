@@ -58,4 +58,4 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 
 **Step 1 is complete.** The engine implements Option A — append-only JSONL log + in-memory `id → offset` index, recovery by replay, torn-tail tolerance — behind `Store` (`TryGet`/`Put`/`ListIds`); the API and portal are built on it, and both suites are green (26 engine + 10 API tests). Data survives a server restart.
 
-**Current: step 2 — deletes via tombstones.** A log can't remove a record, so a delete is another write — a tombstone that replay applies in order. Tests first: the step-2 contract is being written before the implementation.
+**Current: step 2 — deletes via tombstones.** A log can't remove a record, so a delete is another write — a tombstone that replay applies in order. The contract is written and red until `Delete` lands: [003 — Step 2: tombstones](docs/003-step-2-tombstones.md) (38 engine tests, 15 API tests).
