@@ -1,6 +1,6 @@
 # 002 — Step 1 plan: append-only log + in-memory index (Option A)
 
-*2026-10-15 · Follows the decision in [001 — Storage layout](001-storage-layout-options.md): Option A. Status: plan — the engine is not implemented yet.*
+*2026-10-15 · Follows the decision in [001 — Storage layout](001-storage-layout-options.md): Option A. Status: **done — implemented 2026-10-16**; a few details differ from the plan and are recorded under [As built](#as-built-2026-10-16) at the end.*
 
 **Concept of this step:** log-structured storage — an append-only log as the source of truth, an in-memory index as derived data, and recovery by replaying the log at startup.
 
@@ -52,3 +52,12 @@ Black-box at both levels; every test is named `GIVEN_..._WHEN_..._THEN_...`. The
 - `AGENTS.md` and `README.md` status sections are updated.
 
 **Out of scope for this step:** deletes/tombstones (step 2), compaction (3), binary format + CRC32 (4), lock-free reads (6), group commit (7).
+
+## As built (2026-10-16)
+
+The engine is implemented and both suites are green (26 engine + 10 API tests). A few details landed differently from the plan — the black-box contract never depended on them, so the plan is kept as written and reality is recorded here:
+
+- **Classes:** `Store` (not `DocumentStore`), `IdsIndex` (the in-memory `id → offset` index, rebuilt on open), and `Record` — all encoding/decoding lives there; there is no separate `RecordCodec`.
+- **Envelope:** `{"Version":"1","Id":...,"Doc":...}`, one line per record. `Version` is the string `"1"`; `Doc` is the document stored as a JSON string (escaped by `System.Text.Json`, never parsed). The raw-splice sketch above (`{"v":1,"id":...,"doc":<raw>}`) returns the same document bytes for valid JSON — the string form was just simpler to build with the standard serializer.
+- **Constructor:** `Store` takes the log file path, not the data directory — the caller owns the directory (`data/crowdb.log` in the server; a throwaway temp directory in tests).
+- **Torn tail:** replay **skips unparseable lines and continues** instead of stopping at the first one. `RecoveryTests` passes either way — records before the garbage survive and later writes are not lost; skip-and-continue additionally rescues records *after* a bad line.

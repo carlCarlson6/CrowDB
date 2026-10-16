@@ -39,14 +39,14 @@ cd portal && npm install && npm run dev   # portal on http://localhost:3000
 
 The server logs what the store does to the console (`info: CrowDB.Engine.Store`). Failing tests show the same engine logs in their output.
 
-The server needs the step-1 engine implemented before it can serve requests — `DocumentStore` is currently a skeleton whose members throw. Build order and test list: [002 — Step 1 plan](docs/002-step-1-plan.md).
+Data survives restarts: on startup the engine replays `data/crowdb.log` and rebuilds the id index in memory.
 
 ## Roadmap (one concept per step)
 
 | Step | Feature | Concept introduced |
 |---|---|---|
-| 1 | Store & read documents by id (HTTP + portal) | append-only log, index, crash recovery ← *current* |
-| 2 | Delete documents | tombstones |
+| 1 | Store & read documents by id (HTTP + portal) | append-only log, index, crash recovery |
+| 2 | Delete documents | tombstones ← *current* |
 | 3 | Shrink the log | compaction, atomic rename |
 | 4 | Binary record format | framing, CRC32, format migration |
 | 5 | Outgrowing RAM | on-disk sorted index, range scans |
@@ -56,4 +56,6 @@ The server needs the step-1 engine implemented before it can serve requests — 
 
 ## Status
 
-Step 1 planning is complete and the storage decision is **locked — [Option A](docs/001-storage-layout-options.md): append-only JSONL log + in-memory index**. The solution, the API (written against the locked engine surface), and the portal are scaffolded; the engine — the log, the index, recovery by replay — is the next piece to build. Build order: [002 — Step 1 plan](docs/002-step-1-plan.md).
+**Step 1 is complete.** The engine implements Option A — append-only JSONL log + in-memory `id → offset` index, recovery by replay, torn-tail tolerance — behind `Store` (`TryGet`/`Put`/`ListIds`); the API and portal are built on it, and both suites are green (26 engine + 10 API tests). Data survives a server restart.
+
+**Current: step 2 — deletes via tombstones.** A log can't remove a record, so a delete is another write — a tombstone that replay applies in order. Tests first: the step-2 contract is being written before the implementation.
