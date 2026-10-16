@@ -33,7 +33,7 @@ public sealed class Store : IDisposable
     
     public void Put(string id, ReadOnlyMemory<byte> document)
     {
-        var record = Record.Create(id, document, new Metadata());
+        var record = Record.Create(id, document);
         
         _logger.LogInformation("STORE.PUT - {doc}", record.ToString());
         

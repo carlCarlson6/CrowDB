@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using Xunit.Abstractions;
 using static CrowDB.Server.Tests.ApiTestSupport;
@@ -147,7 +148,7 @@ public class DocsApiTests(ITestOutputHelper output)
         // The on-disk format is the contract (docs/001 §3): a previous process
         // can leave a valid log behind, and a restart must serve it.
         await File.WriteAllTextAsync(server.LogFile,
-            """{"v":1,"id":"user:1","doc":{"name":"Ada"}}""" + "\n");
+            """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}"""+"\n");
 
         using var client = server.CreateClient();
 

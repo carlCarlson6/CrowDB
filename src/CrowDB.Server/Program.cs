@@ -3,12 +3,16 @@ using CrowDB.Server;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// The engine keeps everything in one log file that it creates inside this
-// directory. The value in appsettings.json ("../../data") resolves to the
-// repo-root data/ directory.
+// The engine keeps everything in one log file inside this directory. The value
+// in appsettings.json ("../../data") resolves to the repo-root data/ directory.
 var dataDirectory = Path.GetFullPath(
     builder.Configuration["CrowDB:DataDirectory"] ?? "data",
     builder.Environment.ContentRootPath);
+
+// The caller owns the directory, the store owns the file inside it — the same
+// split as in the engine tests (TempDirectory creates the directory, the store
+// gets <directory>/crowdb.log). data/ is gitignored, so a fresh clone has none.
+Directory.CreateDirectory(dataDirectory);
 
 // Logging is already wired by WebApplication.CreateBuilder: it adds the console
 // logger, and appsettings*.json sets the levels. The store gets its ILogger<Store>
@@ -18,7 +22,8 @@ var app = builder.Build();
 
 // One store for the whole process: it owns the log file handle. Constructing
 // it replays the log and rebuilds the in-memory index (recovery).
-var store = new Store(dataDirectory, app.Services.GetRequiredService<ILogger<Store>>());
+var logFile = Path.Combine(dataDirectory, Constants.LOG_FILENAME);
+var store = new Store(logFile, app.Services.GetRequiredService<ILogger<Store>>());
 
 app.MapCrowDbEndpoints(store);
 

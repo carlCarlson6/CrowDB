@@ -8,22 +8,18 @@ namespace CrowDB.Server.Tests;
 /// <summary>
 /// The real CrowDB.Server, running in-process: real routing, real engine, real
 /// log file — no socket, no port. Each instance gets its own throwaway data
-/// directory, deleted on dispose, so tests never touch <c>data/</c> or each other.
+/// directory (<see cref="TempDirectory"/>), so tests never touch <c>data/</c>
+/// or each other.
 /// </summary>
 internal sealed class CrowDbServer(ITestOutputHelper output) : WebApplicationFactory<Program>
 {
-    /// <summary>The data directory this instance's engine writes to (created up front).</summary>
-    public string DataDirectory { get; } = CreateDataDirectory();
+    private readonly TempDirectory _dataDirectory = new();
 
-    private static string CreateDataDirectory()
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "crowdb-api-tests", Guid.NewGuid().ToString("n"));
-        Directory.CreateDirectory(directory);
-        return directory;
-    }
+    /// <summary>The data directory this instance's engine writes to (created up front).</summary>
+    public string DataDirectory => _dataDirectory.Root;
 
     /// <summary>The log file inside <see cref="DataDirectory"/> (docs/001 §3).</summary>
-    public string LogFile => Path.Combine(DataDirectory, "crowdb.log");
+    public string LogFile => _dataDirectory.LogFile;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -36,19 +32,8 @@ internal sealed class CrowDbServer(ITestOutputHelper output) : WebApplicationFac
 
     protected override void Dispose(bool disposing)
     {
+        // The host goes down first (file handles closed), then the directory.
         base.Dispose(disposing);
-
-        // Best effort: a leaked file handle must not turn one failure into many.
-        try
-        {
-            if (Directory.Exists(DataDirectory))
-                Directory.Delete(DataDirectory, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
+        _dataDirectory.Dispose();
     }
 }

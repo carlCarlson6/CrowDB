@@ -65,9 +65,9 @@ public class DiskFormatTests(ITestOutputHelper output)
         // must be a JSON reader, not a string matcher.
         File.WriteAllText(temp.LogFile, string.Join('\n', new[]
         {
-            """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
-            """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
-            """{"Doc":"{\u0022name\u0022:\u0022Ada Lovelace\u0022}","Id":"user:1","Version":"1"}""",
+            """{ "Version":"1", "Id":"user:1", "Doc":"{\u0022name\u0022:\u0022Ada\u0022}" }""",
+            """{ "Version":"1", "Id":"user:2", "Doc" : "{\u0022name\u0022:\u0022Grace\u0022}" }""",
+            """{ "Doc":"{\u0022name\u0022:\u0022Ada Lovelace\u0022}", "Id":"user:1","Version":"1"}""",
         }) + "\n");
 
         using var store = OpenStore(temp.LogFile, output);

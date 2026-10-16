@@ -7,7 +7,7 @@ public record Record(string Id, string Version, string Doc)
 {
     public ReadOnlySpan<byte> Encode() => Encoding.UTF8.GetBytes(ToString());
     
-    public static Record Create(string docId, ReadOnlyMemory<byte> document, Metadata metadata)
+    public static Record Create(string docId, ReadOnlyMemory<byte> document)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(docId);
         if (document.Length == 0)
