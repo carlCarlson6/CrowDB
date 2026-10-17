@@ -13,9 +13,9 @@ CrowDB stores JSON documents and retrieves them by id. It is built with .NET, ex
 
 ## What it does (first POC)
 
-- Store a JSON document under an id; read it back by id; list ids.
+- Store a JSON document under an id; read it back by id; list ids; delete it (a delete is a tombstone appended to the log).
 - NoSQL: documents are opaque JSON bytes to the engine.
-- A small portal to create, view, and load documents.
+- A small portal to create, view, edit, and delete documents.
 
 ## Architecture
 
@@ -46,8 +46,8 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 | Step | Feature | Concept introduced |
 |---|---|---|
 | 1 | Store & read documents by id (HTTP + portal) | append-only log, index, crash recovery |
-| 2 | Delete documents | tombstones ← *current* |
-| 3 | Shrink the log | compaction, atomic rename |
+| 2 | Delete documents | tombstones |
+| 3 | Shrink the log | compaction, atomic rename ← *current* |
 | 4 | Binary record format | framing, CRC32, format migration |
 | 5 | Outgrowing RAM | on-disk sorted index, range scans |
 | 6 | Concurrent reads | immutability, positional I/O |
@@ -58,4 +58,6 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 
 **Step 1 is complete.** The engine implements Option A — append-only JSONL log + in-memory `id → offset` index, recovery by replay, torn-tail tolerance — behind `Store` (`TryGet`/`Put`/`ListIds`); the API and portal are built on it, and both suites are green (26 engine + 10 API tests). Data survives a server restart.
 
-**Current: step 2 — deletes via tombstones.** A log can't remove a record, so a delete is another write — a tombstone that replay applies in order. The contract is written and red until `Delete` lands: [003 — Step 2: tombstones](docs/003-step-2-tombstones.md) (38 engine tests, 15 API tests).
+**Step 2 is complete.** Deletes are tombstones: a log can't remove a record, so a delete is another write that replay applies in order. Engine, `DELETE /docs/{id}`, and both suites are green (38 engine + 15 API tests); deletions survive restarts, and the portal can delete. Design record: [003 — Step 2: tombstones](docs/003-step-2-tombstones.md).
+
+**Next: step 3 — compaction** (the log only grows; dead records and tombstones wait to be reclaimed).

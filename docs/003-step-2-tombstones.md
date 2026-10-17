@@ -1,6 +1,6 @@
 # 003 — Step 2: deletes → tombstones
 
-*2026-10-16 · Follows [001 — Storage layout](001-storage-layout-options.md) §3.6 and closes out [002 — Step 1 plan](002-step-1-plan.md). Status: decided — Option A below (null `Doc`); the test contract is written first and is red until the engine implements `Delete`.*
+*2026-10-16 · Follows [001 — Storage layout](001-storage-layout-options.md) §3.6 and closes out [002 — Step 1 plan](002-step-1-plan.md). Status: **done — implemented 2026-10-17**; the shipped record shape is an explicit `Kind` field, not the recommended null `Doc` — see [As built](#as-built-2026-10-17) at the end.*
 
 **Concept of this step:** the **tombstone** — a record whose only job is to say "this id is deleted". It is the step-1 lesson seen from the other side: the log is the source of truth, so *forgetting* something is itself a write.
 
@@ -98,3 +98,11 @@ What 001 §3.6 sketched (in that era's envelope): a dedicated marker field. Self
 - `README.md` / `AGENTS.md` status updated; this doc's status flips to done.
 
 **Out of scope:** compaction and space reclamation (step 3), binary format + CRC32 (step 4), lock-free reads (step 6), group commit (step 7), soft-delete / undelete / retention semantics (not on the roadmap).
+
+## As built (2026-10-17)
+
+The tombstone works and both suites are green (38 engine + 15 API tests). The behavior contract (§1, §2, §5) is exactly as designed; the record shape landed differently from §3's recommendation:
+
+- **Option C was chosen, with a sentinel:** every record carries a `Kind` field (`"PUT"` or `"DELETE"`), and a tombstone writes `"Doc":"--DELETED--"` instead of JSON null. A record without `Kind` deserializes as `PUT`, so logs written before tombstones still replay. The engine keys off `Kind`; the sentinel exists so a tombstone is readable in `cat data/crowdb.log`.
+- **Tests adapted at the shape boundary only:** two assertions changed (`DiskFormatTests`' tombstone line and the `DocsApiTests` hand-written tombstone) to pin the `Kind` envelope. No behavioral case was weakened or removed — delete/recover/resurrect/torn-tail/escaping all still assert what §5 lists.
+- **Verified end-to-end:** through the portal's rewrite — `DELETE /docs/{id}` → 204, GET → 404, delete → re-`PUT` revives, and tombstones replay as gone after a real server restart.

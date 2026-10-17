@@ -37,12 +37,12 @@ CrowDB/
 - **API:** `PUT /docs/{id}` (client-chosen string id), `GET /docs/{id}`, `GET /docs` (list ids), `POST /docs` (server-generated Guid id).
 - **Engine surface (as built):** `Store` with `TryGet(id, out bytes)`, `Put(id, bytes)`, `ListIds()`; documents as `ReadOnlyMemory<byte>`. The constructor takes the **log file path** and an `ILogger<Store>` — the caller owns the directory.
 - **Logging:** the engine depends on `Microsoft.Extensions.Logging.Abstractions` only (interface-only contract, keeps the engine web-free) — its sole package. The server hands the store the host's logger (console in development; levels in `appsettings*.json`); both test suites hand it a logger that writes into the failing test's output, so a red test shows what the store was doing.
-- **Disk format (as built):** Option A from `docs/001` — append-only JSONL log + in-memory `id → offset` index; all encoding lives in the `Record` class. Envelope `{"Version":"1","Id":...,"Doc":...}`, one line per record — `Doc` is the document as a JSON string (escaped by `System.Text.Json`, byte-exact on round-trip; the engine never parses document content). Replay **skips unparseable lines and keeps going**, rather than stopping at the first one. Option C lands in step 4 as a v1→v2 migration.
+- **Disk format (as built):** Option A from `docs/001` — append-only JSONL log + in-memory `id → offset` index; all encoding lives in the `Record` class. Envelope `{"Version":"1","Id":...,"Doc":...,"Kind":...}`, one line per record — `Doc` is the document as a JSON string (escaped by `System.Text.Json`, byte-exact on round-trip; the engine never parses document content), and `Kind` is `"PUT"` or `"DELETE"` (a missing `Kind` reads as PUT, so pre-tombstone logs stay valid). Tombstones are `"Kind":"DELETE"` with the sentinel `"Doc":"--DELETED--"` — `docs/003`'s recommended null-`Doc` shape was not taken; the explicit kind was chosen instead (see the as-built note in `docs/003`). Replay **skips unparseable lines and keeps going**, rather than stopping at the first one. Option C lands in step 4 as a v1→v2 migration.
 - **Durability:** fsync (`Flush(true)`) per write for now (group commit is step 7).
 - **Concurrency:** the append path takes the store lock for now (lock-free reads are step 6). **As built, reads don't take it** — see Open above.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 2 — deletes → tombstones; the contract is in both suites and red until `Delete` is implemented per `docs/003-step-2-tombstones.md` (engine: tombstone write + replay handling; server: `DELETE /docs/{id}`). Also open from step 1: only `Put` takes the store lock — `TryGet`/`ListIds` read the shared file handle and index unguarded, so concurrent requests can race; fix it alongside one of the next steps.
+**Open:** step 3 — compaction (space reclamation; not started). Carried over from step 1: the lock is only taken on the write path — `TryGet`/`ListIds` read the shared file handle and index unguarded (the owner flagged it in `Store.cs`; fix it alongside one of the next steps).
 
 ## Working protocol
 
@@ -58,8 +58,8 @@ CrowDB/
 ## Roadmap (what "next" means)
 
 1. **POC** — append-only log + id index; store/read/list by id; minimal API; minimal portal. *(done — Option A as built, suites green)*
-2. Deletes → tombstones (why logs can't just forget). *(current — contract written, implementation next)*
-3. Compaction → atomic rename; space reclamation; first concurrency questions.
+2. Deletes → tombstones (why logs can't just forget). *(done — Kind-based tombstones, suites green)*
+3. Compaction → atomic rename; space reclamation; first concurrency questions. *(current)*
 4. Binary format v2 + CRC32 → framing, integrity, format migration.
 5. On-disk sorted index → range scans; dense vs sparse index choices.
 6. Lock-free reads → positional I/O, the immutability dividend.
