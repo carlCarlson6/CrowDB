@@ -135,4 +135,35 @@ public class DiskFormatTests(ITestOutputHelper output)
         Assert.Equal(Bytes("""{"name":"Grace"}"""), Read(store, "user:2"));
         Assert.Equal(new[] { "user:2" }, store.ListIds());
     }
+
+    [Fact]
+    public void GIVEN_overwritten_records_WHEN_compacting_THEN_the_log_holds_exactly_the_live_envelopes_in_log_order()
+    {
+        using var temp = new TempDirectory();
+
+        using (var store = OpenStore(temp.LogFile, output))
+        {
+            store.Put("user:1", Bytes("""{"version":1}"""));
+            store.Put("user:2", Bytes("""{"name":"Grace"}"""));
+            store.Put("user:1", Bytes("""{"version":2}""")); // supersedes line 0 — dead
+            store.Compact();
+        }
+
+        var log = File.ReadAllText(temp.LogFile);
+        var lines = File.ReadAllLines(temp.LogFile);
+
+        // One envelope line per live record; the dead record is physically gone.
+        Assert.Equal(2, lines.Length);
+        Assert.DoesNotContain("""{\u0022version\u0022:1}""", log, StringComparison.Ordinal);
+
+        // Record order follows the log, not the index's dictionary order:
+        // user:2's record was written before user:1's newest one.
+        using var first = JsonDocument.Parse(lines[0]);
+        Assert.Equal("user:2", first.RootElement.GetProperty("Id").GetString());
+
+        using var second = JsonDocument.Parse(lines[1]);
+        Assert.Equal("user:1", second.RootElement.GetProperty("Id").GetString());
+        Assert.Equal("""{"version":2}""", second.RootElement.GetProperty("Doc").GetString());
+        Assert.Equal("PUT", second.RootElement.GetProperty("Kind").GetString());
+    }
 }

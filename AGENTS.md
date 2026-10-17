@@ -42,7 +42,7 @@ CrowDB/
 - **Concurrency:** the append path takes the store lock for now (lock-free reads are step 6). **As built, reads don't take it** — see Open above.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 3 — compaction (space reclamation; not started). Carried over from step 1: the lock is only taken on the write path — `TryGet`/`ListIds` read the shared file handle and index unguarded (the owner flagged it in `Store.cs`; fix it alongside one of the next steps).
+**Open:** step 3 — compaction (space reclamation). Contract written, tests red — engine implementation pending; see `docs/004` and `tests/CrowDB.Engine.Tests/CompactionTests.cs`. Carried over from step 1: the lock is only taken on the write path — `TryGet`/`ListIds` read the shared file handle and index unguarded (the owner flagged it in `Store.cs`); the step-3 contract requires fixing this with one lock for all operations, because compaction swaps both the handle and the index (docs/004 §4.5).
 
 ## Working protocol
 
@@ -70,4 +70,6 @@ CrowDB/
 
 - `docs/001-storage-layout-options.md` — step-1 storage decision: two options with full explanations, roadmap mapping, and a concepts appendix.
 - `docs/002-step-1-plan.md` — step-1 build order for the engine (log, index, replay, torn tail) and its test list.
+- `docs/003-step-2-tombstones.md` — step-2 design record: why deletes are writes, the tombstone shape options, and the written-first contract.
+- `docs/004-step-3-compaction-options.md` — step-3 design record: the compaction algorithm, atomic rename, crash windows, the one-lock decision, and the written-first contract.
 - `README.md` — project intentions and status.

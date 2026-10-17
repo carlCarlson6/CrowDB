@@ -86,6 +86,14 @@ public sealed class Store : IDisposable
         return true;
     }
     
+    // Step 3 (docs/004): compaction — rewrite the log as only its live records,
+    // then swap the new file in with a single atomic rename (rename(2) on
+    // macOS/Linux). The tests are red until this is implemented.
+    public void Compact()
+    {
+        throw new NotImplementedException();
+    }
+
     public void Dispose()
     {
         _logFileStream.Close();

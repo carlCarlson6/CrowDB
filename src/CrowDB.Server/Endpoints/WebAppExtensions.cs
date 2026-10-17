@@ -7,6 +7,7 @@ public static class WebAppExtensions
     public static void MapCrowDbEndpoints(this WebApplication app)
     {
         app.MapGet("/", () => "CrowDB.Server is running. The API lives under /docs.");
+        app.MapCompact();
         app.MapDeleteDocs();
         app.MapGetDocs();
         app.MapWriteDocs();

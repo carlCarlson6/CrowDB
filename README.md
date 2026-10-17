@@ -60,4 +60,6 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 
 **Step 2 is complete.** Deletes are tombstones: a log can't remove a record, so a delete is another write that replay applies in order. Engine, `DELETE /docs/{id}`, and both suites are green (38 engine + 15 API tests); deletions survive restarts, and the portal can delete. Design record: [003 — Step 2: tombstones](docs/003-step-2-tombstones.md).
 
-**Next: step 3 — compaction** (the log only grows; dead records and tombstones wait to be reclaimed).
+**Step 3 is in progress.** The compaction contract is written — `Store.Compact()` + `POST /compact`, red until the engine implements them — with its design record: [004 — Step 3: compaction](docs/004-step-3-compaction-options.md).
+
+**Next after step 3:** step 4 — binary format v2 + CRC32 (framing, integrity, the v1→v2 migration).
