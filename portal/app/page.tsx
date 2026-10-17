@@ -16,6 +16,7 @@ export default function Console() {
   const [body, setBody] = useState("{}\n");
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null); // id awaiting the modal's Delete
 
   const refresh = useCallback(async () => {
     try {
@@ -106,23 +107,25 @@ export default function Console() {
     });
   }
 
-  async function remove() {
+  function askDelete() {
     const id = idDraft.trim();
     if (id === "") return;
+    setConfirmingDelete(id); // the custom modal decides from here
+  }
 
-    const confirmed = window.confirm(
-      `Delete "${id}"? The engine appends a tombstone — the old bytes stay in the log.`,
-    );
-    if (!confirmed) return;
+  async function confirmDelete() {
+    const id = confirmingDelete;
+    if (id === null) return;
+    setConfirmingDelete(null);
 
     await run(async () => {
       const res = await fetch(`${API}/docs/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await describe(res));
-      if (openId === id) setOpenId(null);
+      startNew(); // the document is gone — render a fresh one
       await refresh();
-      return `DELETE /docs/${id} → ${res.status} (tombstone appended — Save to revive)`;
+      return `DELETE /docs/${id} → ${res.status} (tombstone appended)`;
     });
   }
 
@@ -208,7 +211,7 @@ export default function Console() {
             </button>
             <button
               className="danger"
-              onClick={() => void remove()}
+              onClick={askDelete}
               disabled={busy || idDraft.trim() === ""}
               title="DELETE /docs/{id} — appends a tombstone"
             >
@@ -223,6 +226,43 @@ export default function Console() {
           </div>
         </section>
       </div>
+
+      {confirmingDelete !== null && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setConfirmingDelete(null)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setConfirmingDelete(null);
+          }}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-title">Delete this document?</h2>
+            <p>
+              The engine appends a <strong>tombstone</strong>: the old bytes stay in
+              the log, but the id disappears from reads and listings.
+            </p>
+            <code>{confirmingDelete}</code>
+            <div className="row">
+              <button autoFocus onClick={() => setConfirmingDelete(null)}>
+                Cancel
+              </button>
+              <button
+                className="danger"
+                onClick={() => void confirmDelete()}
+                disabled={busy}
+              >
+                Delete (DELETE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
