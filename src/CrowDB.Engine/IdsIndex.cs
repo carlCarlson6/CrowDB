@@ -1,16 +1,12 @@
 using System.Text;
 using System.Text.Json;
+using static CrowDB.Engine.Kind;
 
 namespace CrowDB.Engine;
 
 public class IdsIndex : Dictionary<string, long>
 {
     public IdsIndex(string path)
-    {
-        Recreate(path);
-    }
-
-    private void Recreate(string path)
     {
         var allFile = ReadAllFile(path);
         var records = allFile
@@ -20,7 +16,7 @@ public class IdsIndex : Dictionary<string, long>
         foreach (var (record, offset) in records)
             this[record.Id] = offset;
     }
-
+    
     private List<(Record record, long offset)> ReadAllFile(string path)
     {
         var allText = File.ReadAllText(path);
@@ -34,6 +30,14 @@ public class IdsIndex : Dictionary<string, long>
             {
                 var record = JsonSerializer.Deserialize<Record>(line);
                 if (record is null) throw new Exception("Could not deserialize record");
+                if (record.Kind is DELETE)
+                {
+                    records = records
+                        .Where(x => x.record.Id != record.Id)
+                        .ToList();
+                    continue;
+                }
+                
                 records.Add((record, lastSumOffset));
             }
             catch (Exception e)

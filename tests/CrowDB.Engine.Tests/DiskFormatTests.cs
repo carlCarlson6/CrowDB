@@ -99,7 +99,7 @@ public class DiskFormatTests(ITestOutputHelper output)
         using var tombstone = JsonDocument.Parse(lines[1]);
         Assert.Equal("1", tombstone.RootElement.GetProperty("Version").ToString());
         Assert.Equal("user:1", tombstone.RootElement.GetProperty("Id").GetString());
-        Assert.Equal(JsonValueKind.Null, tombstone.RootElement.GetProperty("Doc").ValueKind);
+        Assert.Equal(Constants.DELETED_DOC, tombstone.RootElement.GetProperty("Doc").ToString());
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public class DiskFormatTests(ITestOutputHelper output)
         File.WriteAllText(temp.LogFile, string.Join('\n', new[]
         {
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
-            """{ "Doc":null, "Id":"user:1", "Version":"1" }""",
+            """{ "Doc":"--DELETED--", "Id":"user:1", "Version":"1", "Kind": "DELETE" }""",
             """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
         }) + "\n");
 

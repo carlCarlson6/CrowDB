@@ -1,9 +1,10 @@
 using System.Text;
 using System.Text.Json;
+using static CrowDB.Engine.Kind;
 
 namespace CrowDB.Engine;
 
-public record Record(string Id, string Version, string Doc)
+public record Record(string Id, string Version, string Doc, string Kind = PUT)
 {
     public ReadOnlySpan<byte> Encode() => Encoding.UTF8.GetBytes(ToString());
     
@@ -16,9 +17,11 @@ public record Record(string Id, string Version, string Doc)
         return new Record(
             Id:       docId,
             Version:  Constants.ENCODE_VERSION,
-            Doc:      Encoding.UTF8.GetString(document.ToArray())
-        );
+            Doc:      Encoding.UTF8.GetString(document.ToArray()),
+            Kind:     PUT);
     }
+    
+    public Record Delete() => this with { Kind = DELETE, Doc = Constants.DELETED_DOC};
     
     public ReadOnlyMemory<byte> ToMemoryDoc() => Encoding.UTF8.GetBytes(Doc);
 
@@ -55,5 +58,12 @@ public record Record(string Id, string Version, string Doc)
 
     public override string ToString() => JsonSerializer.Serialize(this);
 }
+
+public static class Kind
+{
+    public const string DELETE = "DELETE";
+    public const string PUT = "PUT";
+}
+
 
 public record Metadata(string Collection = "");

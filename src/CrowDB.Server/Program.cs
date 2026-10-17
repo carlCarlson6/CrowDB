@@ -1,5 +1,6 @@
 using CrowDB.Engine;
 using CrowDB.Server;
+using CrowDB.Server.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,18 +15,22 @@ var dataDirectory = Path.GetFullPath(
 // gets <directory>/crowdb.log). data/ is gitignored, so a fresh clone has none.
 Directory.CreateDirectory(dataDirectory);
 
+// One store for the whole process: it owns the log file handle. Constructing
+// it replays the log and rebuilds the in-memory index (recovery).
+var logFile = Path.Combine(dataDirectory, Constants.LOG_FILENAME);
+builder.Services
+    .AddSingleton<Store>(sp => new Store(logFile, sp.GetRequiredService<ILogger<Store>>()));
+
+
 // Logging is already wired by WebApplication.CreateBuilder: it adds the console
 // logger, and appsettings*.json sets the levels. The store gets its ILogger<Store>
 // from the host's service provider, so engine logs use that same pipeline — the
 // engine itself only knows the ILogger abstraction.
 var app = builder.Build();
 
-// One store for the whole process: it owns the log file handle. Constructing
-// it replays the log and rebuilds the in-memory index (recovery).
-var logFile = Path.Combine(dataDirectory, Constants.LOG_FILENAME);
-var store = new Store(logFile, app.Services.GetRequiredService<ILogger<Store>>());
 
-app.MapCrowDbEndpoints(store);
+
+app.MapCrowDbEndpoints();
 
 app.Run();
 

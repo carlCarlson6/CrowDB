@@ -223,7 +223,7 @@ public class DocsApiTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(server.LogFile, string.Join('\n', new[]
         {
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",
-            """{"Version":"1","Id":"user:1","Doc":null}""",
+            """{"Version":"1","Id":"user:1","Doc":"--DELETED--", "Kind": "DELETE" }""",
             """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
         }) + "\n");
 

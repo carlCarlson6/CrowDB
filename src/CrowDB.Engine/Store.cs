@@ -1,7 +1,8 @@
-using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace CrowDB.Engine;
+
+// TODO - resolve lock on filestream - "The field is sometimes used inside synchronized block and sometimes used without synchronization"
 
 public sealed class Store : IDisposable
 {
@@ -31,13 +32,15 @@ public sealed class Store : IDisposable
         return true;
     }
     
+    public bool CheckExists(string id) => _idsIndex.ContainsKey(id);
+    
     public void Put(string id, ReadOnlyMemory<byte> document)
     {
         var record = Record.Create(id, document);
         
         _logger.LogInformation("STORE.PUT - {doc}", record.ToString());
         
-        lock (_logFileStream)
+        lock (_logFileStream)  // TODO - duplicated on PUT - unify
         {
             _logFileStream.Seek(0, SeekOrigin.End);
             if (_logFileStream.Length > 0) _logFileStream.Write("\n"u8);
@@ -50,14 +53,42 @@ public sealed class Store : IDisposable
     
     public IReadOnlyList<string> ListIds() => _idsIndex.Keys.ToList().AsReadOnly();
 
+    public bool Delete(string id)
+    {
+        _logger.LogInformation("STORE.DELETE - {id}", id);
+        
+        var found = _idsIndex.TryGetValue(id, out var offset);
+        if (!found) return false;
+
+        try
+        {
+            lock (_logFileStream)
+            {
+                var recordSegment = Record.ReadRecordSegment(_logFileStream, offset);
+                var deletedRecord = Record.Decode(recordSegment).Delete().Encode();
+                
+                
+                // TODO - duplicated on PUT - unify
+                _logFileStream.Seek(0, SeekOrigin.End);
+                if (_logFileStream.Length > 0) _logFileStream.Write("\n"u8);
+                _logFileStream.Write(deletedRecord);
+                _logFileStream.Flush(true);
+
+                _idsIndex.Remove(id);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Error deleting record - {id}", id);
+            return false;
+        }
+        
+        return true;
+    }
+    
     public void Dispose()
     {
         _logFileStream.Close();
         _logFileStream.Dispose();
-    }
-
-    public bool Delete(string user)
-    {
-        throw new NotImplementedException();
     }
 }
