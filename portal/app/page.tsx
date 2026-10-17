@@ -106,6 +106,26 @@ export default function Console() {
     });
   }
 
+  async function remove() {
+    const id = idDraft.trim();
+    if (id === "") return;
+
+    const confirmed = window.confirm(
+      `Delete "${id}"? The engine appends a tombstone — the old bytes stay in the log.`,
+    );
+    if (!confirmed) return;
+
+    await run(async () => {
+      const res = await fetch(`${API}/docs/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await describe(res));
+      if (openId === id) setOpenId(null);
+      await refresh();
+      return `DELETE /docs/${id} → ${res.status} (tombstone appended — Save to revive)`;
+    });
+  }
+
   return (
     <main className="console">
       <header className="topbar">
@@ -185,6 +205,14 @@ export default function Console() {
           <div className="row">
             <button className="primary" onClick={() => void save()} disabled={busy}>
               {idDraft.trim() === "" ? "Create (POST)" : "Save (PUT)"}
+            </button>
+            <button
+              className="danger"
+              onClick={() => void remove()}
+              disabled={busy || idDraft.trim() === ""}
+              title="DELETE /docs/{id} — appends a tombstone"
+            >
+              Delete
             </button>
             <span className="muted">{byteLength(body)} bytes</span>
             {status !== null && (

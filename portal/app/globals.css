@@ -148,6 +148,16 @@ button.primary:hover:not(:disabled) {
   background: #35332f;
 }
 
+button.danger {
+  color: var(--bad);
+  border-color: #e7c7c4;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #fdf4f3;
+  border-color: #d9a89f;
+}
+
 .ids {
   list-style: none;
   margin: 0;
