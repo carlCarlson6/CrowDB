@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit.Abstractions;
 
 namespace CrowDB.Server.Tests;
@@ -164,6 +165,20 @@ public class OpenApiDocsTests(ITestOutputHelper output)
         Assert.Equal(
             "https://crowdb.up.railway.app/",
             document.RootElement.GetProperty("servers")[0].GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public async Task GIVEN_the_server_root_WHEN_opening_it_THEN_it_sends_the_browser_to_the_reference()
+    {
+        // The root is the reference's front door (docs/006 §4): typing the
+        // bare host lands in the Scalar UI.
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/scalar/", response.Headers.Location?.ToString());
     }
 
     [Fact]

@@ -11,9 +11,11 @@ public static class WebAppExtensions
 {
     public static void MapCrowDbEndpoints(this WebApplication app)
     {
-        // The banner is not part of the API contract — keep it out of the
-        // reference (docs/006 §4).
-        app.MapGet("/", Root).ExcludeFromDescription();
+        // The root is the reference's front door (docs/006 §4): typing the
+        // bare host lands in the Scalar UI. Like the UI itself it is public
+        // (ApiKeyAuthentication) and excluded from the document — it is not
+        // part of the API contract.
+        app.MapGet("/", () => Results.Redirect("/scalar/")).ExcludeFromDescription();
         app.MapCompact();
         app.MapDeleteDocs();
         app.MapGetDocs();
@@ -28,10 +30,6 @@ public static class WebAppExtensions
         app.MapOpenApi();
         app.MapScalarApiReference();
     }
-
-    /// <summary>Confirms the server is running and points at the API and its reference.</summary>
-    private static string Root() =>
-        "CrowDB.Server is running. The API lives under /docs; the API reference is at /scalar.";
 }
 
 public static class HttpRequestExtensions

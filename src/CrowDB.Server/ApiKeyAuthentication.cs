@@ -23,9 +23,11 @@ public static class ApiKeyAuthentication
 
     /// <summary>
     /// The API reference (docs/006 §3): public even when a key is configured.
-    /// A browser loads /scalar and its scripts, and the page fetches the
-    /// OpenAPI document — none of which can carry the header. The paths are
-    /// matched per segment, so "/scalar-extra" is not the reference.
+    /// A browser cannot carry the header for the root (which redirects into
+    /// the UI), the UI at /scalar with its scripts, or the OpenAPI document
+    /// the page fetches. Every other route — all of /docs and /compact —
+    /// stays gated. Paths are matched per segment, so "/scalar-extra" is not
+    /// the reference.
     /// </summary>
     private const string ScalarPathPrefix = "/scalar";
 
@@ -42,7 +44,7 @@ public static class ApiKeyAuthentication
         app.Use(async (context, next) =>
         {
             var path = context.Request.Path;
-            if (path.StartsWithSegments(ScalarPathPrefix) || path.StartsWithSegments(OpenApiPathPrefix))
+            if (path == "/" || path.StartsWithSegments(ScalarPathPrefix) || path.StartsWithSegments(OpenApiPathPrefix))
             {
                 await next(context);
                 return;

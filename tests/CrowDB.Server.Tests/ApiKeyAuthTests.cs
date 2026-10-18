@@ -9,17 +9,16 @@ namespace CrowDB.Server.Tests;
 /// The deployment contract of CrowDB.Server (docs/005): a configured API key
 /// gates every endpoint — the check happens at the HTTP edge, before routing
 /// and before the engine, so an unauthenticated request can never reach the
-/// store. The API reference is the one exception (docs/006): /scalar and
-/// /openapi are public. A configured key is enforced in every environment;
-/// Development without a key stays open for local use, and any other
-/// environment without a key refuses to start.
+/// store. The API reference is the one exception (docs/006): / (which
+/// redirects into the UI), /scalar and /openapi are public. A configured key
+/// is enforced in every environment; Development without a key stays open for
+/// local use, and any other environment without a key refuses to start.
 /// </summary>
 public class ApiKeyAuthTests(ITestOutputHelper output)
 {
     private const string Key = "correct-horse-battery-staple";
 
     [Theory]
-    [InlineData("GET", "/")]
     [InlineData("GET", "/docs")]
     [InlineData("GET", "/docs/user:1")]
     [InlineData("PUT", "/docs/user:1")]
@@ -109,6 +108,10 @@ public class ApiKeyAuthTests(ITestOutputHelper output)
 
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/scalar")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/openapi/v1.json")).StatusCode);
+
+        // The root is the reference's front door and redirects into it; the
+        // client follows.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/")).StatusCode);
 
         // Only the reference prefixes are public — matched per path segment,
         // and not as loose string prefixes.

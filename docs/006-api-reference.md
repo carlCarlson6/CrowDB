@@ -19,17 +19,17 @@ The API is tiny but it keeps changing (delete in step 2, `/compact` in step 3, t
 - XML documentation from referenced assemblies that enable it, and
 - **only `public` members of the app assembly** (its `ParseCompilation` visits public types/properties/methods) — which is why every endpoint handler is now `public static`. This is the one surprising rule of the whole feature; it is noted next to `MapCrowDbEndpoints` in `WebAppExtensions.cs`.
 
-For the `<response>` text to land, the status codes must be *declared* first: each endpoint carries `.Produces(...)` for the codes it answers with (`200/400/404/415` as appropriate) and `.Accepts<JsonElement>("application/json")` for its body. `JsonElement` documents the body as free-form JSON — exactly what CrowDB accepts, because documents are opaque bytes to the engine. The banner at `/` is `.ExcludeFromDescription()`: it is not part of the API contract. Operation tags default to the endpoint class names (`GetDocs`, `WriteDocs`, `Compact`, `DeleteDocs`) — a code-organisation view, deliberately not themed further.
+For the `<response>` text to land, the status codes must be *declared* first: each endpoint carries `.Produces(...)` for the codes it answers with (`200/400/404/415` as appropriate) and `.Accepts<JsonElement>("application/json")` for its body. `JsonElement` documents the body as free-form JSON — exactly what CrowDB accepts, because documents are opaque bytes to the engine. The root `/` is `.ExcludeFromDescription()` too: it redirects into the UI — a front door, not an API operation. Operation tags default to the endpoint class names (`GetDocs`, `WriteDocs`, `Compact`, `DeleteDocs`) — a code-organisation view, deliberately not themed further.
 
 ## 3. Public reference, gated API (docs/005, amended)
 
 docs/005 decided: "configured → every request enforced". A browser cannot put `X-Api-Key` on the *page load* of the UI, so the options were:
 
-- **Exempt the reference paths (chosen).** `/scalar` and `/openapi` are served without the key; every data route — including `/` and all of `/docs` — stays gated. A reference describes the API; the key protects the data.
+- **Exempt the reference paths (chosen).** `/` (the front door, which redirects into the UI), `/scalar` and `/openapi` are served without the key; every data route — all of `/docs` and `/compact` — stays gated. A reference describes the API; the key protects the data.
 - Docs only in Development (the pattern in Microsoft's own template). Rejected: the deployed instance — the one you want to poke — would have no reference at all.
 - Gated docs. Rejected: the HTML page itself would 401, so the UI could never load in a deployment.
 
-**As built:** `ApiKeyAuthentication` lets requests through when the path starts with the `/scalar` or `/openapi` *segment* (`StartsWithSegments`, so `/scalar-extra` is not the reference); the fail-closed startup rule is untouched — outside Development the server still refuses to start without a key.
+**As built:** `ApiKeyAuthentication` lets the reference's surface through without the key: the root `/` (the front door, which redirects into the UI) and paths starting with the `/scalar` or `/openapi` *segment* (`StartsWithSegments`, so `/scalar-extra` is not the reference); the fail-closed startup rule is untouched — outside Development the server still refuses to start without a key.
 
 The document mirrors the deployment it is served by:
 
@@ -44,7 +44,7 @@ Server-side enforcement stays docs/005's middleware (fixed-time comparison, befo
 - **Option B — `Scalar.AspNetCore` at `/scalar` (chosen).** The UI the official ASP.NET Core docs pair with `Microsoft.AspNetCore.OpenApi`; one package with no dependencies.
 - Option C — render the document ourselves in the portal. That is a client project, not a server concern; the portal stays a debug console.
 
-**As built: B.** `MapScalarApiReference()` serves `/scalar` (redirects to `/scalar/`; `/scalar/v1` names the document explicitly). The page's JavaScript is **embedded in the package and served by this process** — `/scalar/scalar.js`, `/scalar/scalar.aspnetcore.js`, `/scalar/favicon.svg` — so there is no CDN and the reference works offline and inside the container. The HTML carries the document's route (relative, `openapi/v1.json`) and the client fetches it in the browser.
+**As built: B.** `MapScalarApiReference()` serves `/scalar` (redirects to `/scalar/`; `/scalar/v1` names the document explicitly). The root `/` redirects to `/scalar/` as well — typing the bare host lands in the reference, the usual pattern for a self-documenting server. The page's JavaScript is **embedded in the package and served by this process** — `/scalar/scalar.js`, `/scalar/scalar.aspnetcore.js`, `/scalar/favicon.svg` — so there is no CDN and the reference works offline and inside the container. The HTML carries the document's route (relative, `openapi/v1.json`) and the client fetches it in the browser.
 
 The document also carries a `servers` entry — the URL the browser sends the "try it" requests to. It is derived from the incoming request (scheme + host), so behind a proxy the forwarded headers must be trusted: `Program.cs` enables the forwarded-headers middleware (`X-Forwarded-Proto`, `X-Forwarded-Host`, known networks cleared) because Railway's edge terminates TLS, **overwrites** both headers, and publishes no stable proxy addresses. Without it, the `https://…/scalar` page would be handed an `http://…` server URL and the browser would block every request as mixed content — which is exactly how the first Railway test of the reference failed. Locally the headers never appear, so nothing changes.
 
@@ -66,31 +66,32 @@ The document also carries a `servers` entry — the URL the browser sends the "t
 
 ## 7. The contract (test map)
 
-`tests/CrowDB.Server.Tests` — 11 new cases through the real server in-process:
+`tests/CrowDB.Server.Tests` — 12 new cases through the real server in-process:
 
 | Case | Proves |
 |---|---|
 | `OpenApiDocsTests`: document → 200 JSON with `openapi` + `paths` | the route exists and parses |
-| path/method set equals `/docs` GET·POST, `/docs/{id}` GET·PUT·DELETE, `/compact` POST — and nothing else | the reference cannot drift from the routes; docs and banner routes leak in nowhere |
+| path/method set equals `/docs` GET·POST, `/docs/{id}` GET·PUT·DELETE, `/compact` POST — and nothing else | the reference cannot drift from the routes; the root, the docs and the UI routes leak into it nowhere |
 | every operation has a non-empty `summary` | the XML comments reach the document (the public-handler rule) |
 | declared status codes per operation; one `<response>` description | the metadata and comment texts land where they should |
 | key configured → `ApiKeyAuth` scheme (apiKey/header/`X-Api-Key`) + global requirement | the auth panel appears in deployments |
 | no key → no `security`/`securitySchemes` | the document describes the server it is served by |
 | `X-Forwarded-Proto`/`-Host` on the document request → the `servers` URL is the public `https` one | the reference works behind Railway's proxy (no mixed content) |
+| `/` → 302 to `/scalar/` | the root is the reference's front door |
 | `/scalar` → HTML that references `openapi/v1.json` | the UI page works end to end |
 | the page's scripts → 200 JavaScript **from this host** | embedded bundle, no CDN |
-| `ApiKeyAuthTests`: `/scalar` and `/openapi/v1.json` → 200 without the key in Production; `/scalar-extra` and `/docs` → 401 | public reference, gated API, segment-exact matching |
+| `ApiKeyAuthTests`: `/` (followed), `/scalar` and `/openapi/v1.json` → 200 without the key in Production; `/scalar-extra` and `/docs` → 401 | public front door and reference; gated API; segment-exact matching |
 | `DocsApiTests`: `text/plain` write → 415 and nothing stored; empty `application/json` → 400 | the content-type gate and the unchanged JSON check |
 
 ## 8. What it changes
 
 - **New:** `docs/006-api-reference.md` (this record), `tests/CrowDB.Server.Tests/OpenApiDocsTests.cs`.
-- **Changed:** `CrowDB.Server.csproj` (two packages, `GenerateDocumentationFile`), `Program.cs` (`AddOpenApi`; the security-scheme transformer runs only when a key is configured; forwarded-headers middleware for proxied deployments), `WebAppExtensions.cs` (maps the reference routes, excludes the banner, keeps the handler rule next to the mapping), `ApiKeyAuthentication.cs` (the public prefixes + the scheme name), the endpoint files (handlers public, XML comments, `Produces`/`Accepts` metadata), `DocsApiTests.cs` (415 case, empty-body case), `ApiKeyAuthTests.cs` (the exemption case), `README.md`, `AGENTS.md`.
+- **Changed:** `CrowDB.Server.csproj` (two packages, `GenerateDocumentationFile`), `Program.cs` (`AddOpenApi`; the security-scheme transformer runs only when a key is configured; forwarded-headers middleware for proxied deployments), `WebAppExtensions.cs` (root redirects into the reference; maps the document and UI routes; keeps the handler rule next to the mapping), `ApiKeyAuthentication.cs` (the public front door + prefixes + the scheme name), the endpoint files (handlers public, XML comments, `Produces`/`Accepts` metadata), `DocsApiTests.cs` (415 case, empty-body case), `ApiKeyAuthTests.cs` (the exemption case), `README.md`, `AGENTS.md`.
 - **Unchanged:** the engine (web-free as ever), the on-disk format, the routing itself, the portal, the Docker files.
 
 ## 9. Decisions you will meet
 
-- **The reference is public; the data is not.** Anyone who can reach the port can read the API description — and still gets an empty 401 from every data route without the key. If the deployment's very existence must be secret, put auth in front of the whole host.
+- **The reference is public; the data is not.** Anyone who can reach the port can read the API description — the root leads straight into it — and still gets an empty 401 from every data route without the key. If the deployment's very existence must be secret, put auth in front of the whole host.
 - **Behind a proxy, the document follows the edge.** The `servers` URL is request-derived, so the server honors `X-Forwarded-Proto`/`-Host` (trusting the immediate peer — Railway publishes no stable proxy IPs and its edge overwrites the headers). An `https://` page handed an `http://` URL gets its browser requests blocked as mixed content; that is the failure this middleware fixes, not a CORS one.
 - **415 now exists.** Write operations answer 415 for a non-JSON `Content-Type` and 400 for JSON-declared bodies that are not JSON. Both are per-handler truth, declared in the document.
 - **The document's title/version are the defaults** (`CrowDB.Server | v1`, `1.0.0`). Custom info, logos and themes are later decisions.
