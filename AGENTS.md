@@ -41,6 +41,7 @@ CrowDB/
 - **Durability:** fsync (`Flush(true)`) per write for now (group commit is step 7).
 - **Concurrency (as built, step 3):** one private readonly `System.Threading.Lock`, taken by every operation — reads included — because compaction swaps both the file handle and the index (`docs/003` §4.5); lock-free reads are step 6. The log is held with `FileShare.None`: reopening a log requires disposing its store first.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
+- **Deployment (as built, docs/005):** API key in the `X-Api-Key` header, read from `CrowDB:ApiKey` (env `CrowDB__ApiKey`), compared fixed-time; configured → every request enforced, unset → Development runs open with a startup warning and any other environment refuses to start. Container: `docker/Dockerfile` (multi-stage, non-root `app` user, `/data` volume, listens on `:8080` via `--urls` — command line, since `appsettings.json`'s `Urls` beats `ASPNETCORE_URLS` here) built by `docker/build.sh`; `docker/entrypoint.sh` runs the server as a child so a refused start exits the container with its real code and `SIGTERM` shuts down gracefully. The key is never baked into the image.
 
 **Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract written (red) — [004 — Step 4: binary format v2](docs/004-step-4-binary-format-v2.md) contains the design options with recommendations and the test map; both suites are extended and fail until the engine implements it.
 
@@ -73,4 +74,5 @@ CrowDB/
 - `docs/002-step-2-tombstones.md` — step-2 design record: why deletes are writes, the tombstone shape options, and the written-first contract.
 - `docs/003-step-3-compaction-options.md` — step-3 design record: the compaction algorithm, atomic rename, crash windows, the one-lock decision, and the written-first contract.
 - `docs/004-step-4-binary-format-v2.md` — step-4 design record: the v2 frame byte by byte, the CRC32 and corruption policy, the sniff/migration rules, and the written-first contract.
+- `docs/005-api-key-and-container.md` — deployment record: the HTTP-edge auth gate, the fail-closed startup rule, the header/comparison choices, the test map, and the container image decisions (command-line URLs, the child-process entrypoint).
 - `README.md` — project intentions and status.
