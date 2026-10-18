@@ -9,14 +9,24 @@ namespace CrowDB.Engine;
 
 public class IdsIndex : Dictionary<Id, Offset>
 {
+    private readonly string _path;
+    
     public IdsIndex(string path)
     {
-        var allFile = ReadAllFile(path);
-        var records = allFile
+        _path = path;
+        Recreate();
+    }
+    
+    public void Recreate()
+    {
+        Clear();
+        
+        var records = ReadAllFile(_path)
             .GroupBy(x => x.record.Id)
             .Select(group => group
                 .MaxBy(y => y.offset))
             .Where(x => x.record.Kind != DELETE);
+        
         foreach (var (record, offset) in records)
             this[record.Id] = offset;
     }
@@ -49,4 +59,6 @@ public class IdsIndex : Dictionary<Id, Offset>
         
         return records;
     }
+
+
 }

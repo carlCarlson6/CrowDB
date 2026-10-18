@@ -219,8 +219,7 @@ public class CompactionTests(ITestOutputHelper output)
             store.Compact();
 
             Assert.Equal(version2, Read(store, "user:1"));
-            Assert.False(File.Exists(temp.LogFile + ".compact"),
-                "the rename consumes the temp file");
+            Assert.False(File.Exists(temp.LogFile + ".compact"), "the rename consumes the temp file");
         }
 
         var log = File.ReadAllText(temp.LogFile);

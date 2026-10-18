@@ -78,16 +78,12 @@ public sealed class Store : IDisposable
         return true;
     }
     
-    // Step 3 (docs/004): compaction — rewrite the log as only its live records,
-    // then swap the new file in with a single atomic rename (rename(2) on
-    // macOS/Linux). The tests are red until this is implemented.
     public void Compact()
     {
         lock (_logFileStream)
-        {
-            var compactFileName = $"crowdb_compact_{Guid.NewGuid()}.log";
-            var compactFilePath = _path.Replace(Constants.LogFilename, compactFileName);
-            var compactFileStream = File.Open(compactFilePath, FileMode.OpenOrCreate);
+        { 
+            var compactFilePath = $"{_path}.compact";
+            var compactFileStream = File.Open(compactFilePath, FileMode.Create);
             
             foreach (var offset in _idsIndex.Values)
             {
@@ -100,6 +96,7 @@ public sealed class Store : IDisposable
             _logFileStream.Close();
             
             File.Move(compactFilePath, _path, overwrite: true);
+            _idsIndex.Recreate();
             _logFileStream = File.Open(_path, FileMode.OpenOrCreate);
         }
     }
