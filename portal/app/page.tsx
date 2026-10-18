@@ -107,6 +107,14 @@ export default function Console() {
     });
   }
 
+  async function compact() {
+    await run(async () => {
+      const res = await fetch(`${API}/compact`, { method: "POST" });
+      if (!res.ok) throw new Error(await describe(res));
+      return `POST /compact → ${res.status} (dead puts and tombstones reclaimed)`;
+    });
+  }
+
   function askDelete() {
     const id = idDraft.trim();
     if (id === "") return;
@@ -157,6 +165,13 @@ export default function Console() {
             </button>
             <button onClick={startNew} disabled={busy}>
               New document
+            </button>
+            <button
+              onClick={() => void compact()}
+              disabled={busy}
+              title="POST /compact — rewrites the log as only its live records"
+            >
+              Compact log
             </button>
           </div>
 

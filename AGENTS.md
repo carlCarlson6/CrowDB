@@ -42,7 +42,7 @@ CrowDB/
 - **Concurrency (as built, step 3):** one private readonly `System.Threading.Lock`, taken by every operation — reads included — because compaction swaps both the file handle and the index (`docs/003` §4.5); lock-free reads are step 6. The log is held with `FileShare.None`: reopening a log requires disposing its store first.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract not written yet. Carried over from step 3: `ListIds()` reads the index without the lock — no test calls it concurrently, but the server can (`GET /docs` while `POST /compact` runs); it should take the same lock (one line).
+**Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract not written yet.
 
 ## Working protocol
 

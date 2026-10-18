@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrowDB.Engine", "src\CrowDB.Engine\CrowDB.Engine.csproj", "{1EFCBABA-96C0-40FE-BCF2-777433FFC170}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrowDB.Server", "src\CrowDB.Server\CrowDB.Server.csproj", "{BB9717DE-9C2E-47F8-B6CC-1D4E7C95B789}"
