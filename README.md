@@ -53,6 +53,8 @@ docker run --rm -p 5217:8080 -e CrowDB__ApiKey="$KEY" -v crowdb-data:/data crowd
 
 Outside Development the server **refuses to start without `CrowDB:ApiKey`** — a deployment cannot silently run open. Every request then carries the key in the `X-Api-Key` header (`curl -H "X-Api-Key: $KEY" http://localhost:5217/docs`); missing or wrong keys get an empty `401`. Data lives at `/data` inside the container (the `crowdb-data` volume above), so it survives replacing the container. Keys over plain HTTP are only as private as the network — put TLS in front before using this anywhere real. Local development is unchanged: `dotnet run` in Development with no key configured serves openly, which is what the portal expects.
 
+On Railway, `railway.json` already points the service at `docker/Dockerfile`; set `CrowDB__ApiKey`, mount a volume at `/data`, and set `RAILWAY_RUN_UID=0` — Railway mounts volumes as root while the image runs as `app`. The server binds all interfaces on the injected `PORT` (8080), so the domain's target port can stay unset.
+
 Design record: [005 — API keys & the container image](docs/005-api-key-and-container.md).
 
 ## Roadmap (one concept per step)
