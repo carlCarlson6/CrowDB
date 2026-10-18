@@ -18,6 +18,16 @@ copy an id or delete it straight from the list. **⌘/Ctrl+S** saves from
 anywhere, **⌘/Ctrl+Enter** saves from the editor. Dialogs close on Escape and
 keep Tab inside them.
 
+**The editor reads your JSON (docs/009).** The document field is CodeMirror 6
+(line numbers, syntax highlighting, undo), and a line under it always says what
+the buffer is: `valid JSON · object with 3 properties`, or the first problem as
+`line 3, column 7 — expected ':' after the property name` — where the position
+is a button that jumps the caret onto the problem, and the editor gets a gutter
+marker and a squiggle. The same check gates Save, so invalid JSON is never
+sent. **Format** re-indents what you wrote, whitespace only — key order, number
+spellings and escape sequences survive — and loading a document pretty-prints
+through the same reader.
+
 **The key (docs/007).** The server authenticates every request, so the console
 asks for the key in a dialog on the first visit and keeps it in this browser
 (`localStorage`); every request carries it as `X-Api-Key`. The dialog returns
@@ -55,12 +65,20 @@ case-sensitive; 8080 is the API's target port). No key lives in the portal's
 environment; visitors paste it into the dialog. Full record:
 [docs/007](../docs/007-portal-key-and-deployment.md).
 
+## Test it
+
+`npm test` runs the JSON reader's suite (`app/json.test.ts`) on Node's built-in
+test runner — no test framework, no build step (Node executes the TypeScript
+directly).
+
 ## Notes
 
 - Plain `fetch`, no data-fetching library, no CSS framework — it is a debug
-  console, not a product.
-- The portal pretty-prints documents on load; what you see in the textarea is
-  what gets stored (the engine treats it as opaque bytes).
+  console, not a product. The document editor is the one exception: CodeMirror
+  6, exact-pinned (docs/009).
+- The portal pretty-prints documents on load with a whitespace-only formatter;
+  what you see in the editor is what gets stored when you save (the engine
+  treats it as opaque bytes).
 - The API docs section describes the API; it has no "try it" forms. For
   clickable requests, use the server's `/scalar` (the raw document is at
   `/openapi/v1.json`).

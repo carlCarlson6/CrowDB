@@ -57,7 +57,7 @@ The actions span appears on row hover or keyboard focus, and is always visible o
 
 ## 8. Verified how
 
-No JS test harness exists and none is added (golden rule 7, docs/007 §6). `npx tsc --noEmit` and `npm run build` are green. A smoke run — API on a throwaway data directory, portal `next start` on another port pointed at it via `CROWDB_API_URL` — proved pages, proxy, key gate and CRUD end to end. Then the console itself was driven in **headless Chrome over the DevTools protocol** (an ad-hoc script in a scratch directory, nothing committed): 43 passing checks against the built portal, covering the first-visit key dialog, the dirty/`modified` lifecycle, both guard paths (Keep editing / Discard changes), **⌘S**, dialog Escape/Tab/focus-return, copy/del row actions including their editor side effects, the POST and DELETE flows, and the 500 px stacking. Left as manual checks: the `beforeunload` dialog (browser-owned, needs real user activation) and pointer-hover reveals (headless has no hover).
+No JS test harness exists and none is added (golden rule 7, docs/007 §6) — **(amended by docs/009:** one does now: Node's built-in test runner, one test file for the JSON reader; UI behavior is still smoke-checked, not browser-tested.) `npx tsc --noEmit` and `npm run build` are green. A smoke run — API on a throwaway data directory, portal `next start` on another port pointed at it via `CROWDB_API_URL` — proved pages, proxy, key gate and CRUD end to end. Then the console itself was driven in **headless Chrome over the DevTools protocol** (an ad-hoc script in a scratch directory, nothing committed): 43 passing checks against the built portal, covering the first-visit key dialog, the dirty/`modified` lifecycle, both guard paths (Keep editing / Discard changes), **⌘S**, dialog Escape/Tab/focus-return, copy/del row actions including their editor side effects, the POST and DELETE flows, and the 500 px stacking. Left as manual checks: the `beforeunload` dialog (browser-owned, needs real user activation) and pointer-hover reveals (headless has no hover).
 
 ## 9. What it changes
 
@@ -67,7 +67,7 @@ No JS test harness exists and none is added (golden rule 7, docs/007 §6). `npx 
 
 ## 10. Decisions you will meet
 
-- **Still no editor library** — no syntax highlighting, no schema hints; JSON is checked with one `JSON.parse` on save, and bytes are stored verbatim.
+- **Still no editor library** — no syntax highlighting, no schema hints; JSON is checked with one `JSON.parse` on save, and bytes are stored verbatim. **(Amended by docs/009:** the document field is CodeMirror 6 fed by a console-owned JSON reader — live diagnostics with positions, a lint strip, and byte-faithful Format; schema hints and schema validation still don't exist.)
 - **Ids stay unsorted** in the console; the filter narrows without reordering.
 - **The filter is case-insensitive and client-side** — the engine's `ListIds` is still the only list source.
 - **`beforeunload` is the browser's dialog, not ours** — nothing custom can reliably replace it.

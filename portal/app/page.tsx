@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import JsonEditor, { type JsonEditorHandle } from "./json-editor";
+import { formatJson, lintJson } from "./json";
 import Modal from "./modal";
 
 // The portal talks to CrowDB.Server through its own origin: the proxy route
@@ -14,6 +16,9 @@ const KEY_STORAGE = "crowdb:api-key";
 
 /** What a brand-new document starts from. */
 const BLANK_BODY = "{}\n";
+
+/** The document field's visible label — and the editing surface's accessible name. */
+const DOCUMENT_LABEL = "document (JSON, stored verbatim)";
 
 type Status = { ok: boolean; text: string };
 
@@ -54,6 +59,7 @@ export default function Console() {
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null); // id awaiting the modal's Delete
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null); // action waiting behind the discard dialog
+  const editor = useRef<JsonEditorHandle | null>(null); // bridge into the CodeMirror editor
 
   // The API key (docs/007): the server authenticates every request, so the
   // console asks for the key once, keeps it in localStorage, and sends it as
@@ -84,6 +90,11 @@ export default function Console() {
     baseline === null
       ? draftId !== "" || body !== BLANK_BODY
       : draftId !== baseline.id || body !== baseline.body;
+
+  // What the buffer currently amounts to: recomputed on every keystroke, shown
+  // as a strip under the editor, and enforced by Save — one source of truth
+  // for squiggles and writes alike (docs/009).
+  const lint = useMemo(() => lintJson(body), [body]);
 
   const needle = filter.trim().toLowerCase();
   const visibleIds = needle === "" ? ids : ids.filter((id) => id.toLowerCase().includes(needle));
@@ -224,7 +235,10 @@ export default function Console() {
       const res = await call(`/docs/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(await describe(res));
       const text = await res.text();
-      const shown = pretty(text);
+      // Re-indent for reading without touching content: key order, number
+      // spellings and escapes survive (docs/009). Text the reader refuses
+      // (only possible from writes that bypassed the server) is shown as-is.
+      const shown = formatJson(text) ?? text;
       setBaseline({ id, body: shown });
       setIdDraft(id);
       setBody(shown);
@@ -259,6 +273,13 @@ export default function Console() {
     setBody(baseline.body);
   }
 
+  /** Re-indent the buffer — whitespace only; nothing is written until Save. */
+  function format() {
+    const formatted = formatJson(body);
+    if (formatted === null || formatted === body) return;
+    setBody(formatted);
+  }
+
   async function save() {
     // A shortcut can fire while a dialog owns the page or a request is in
     // flight: silently do nothing in those moments.
@@ -266,11 +287,15 @@ export default function Console() {
 
     const id = idDraft.trim();
 
-    // Fail fast with a clear message; the server would reject it anyway.
-    try {
-      JSON.parse(body);
-    } catch (error) {
-      setStatus({ ok: false, text: `not valid JSON — ${message(error)}` });
+    // Fail fast with the reader's own diagnosis — the same one the squiggles
+    // show — and put the caret on the problem; the server would answer 400
+    // anyway (docs/009).
+    if (!lint.ok) {
+      setStatus({
+        ok: false,
+        text: `not valid JSON — line ${lint.error.line}, column ${lint.error.column}: ${lint.error.message}`,
+      });
+      editor.current?.focusOffset(lint.error.offset);
       return;
     }
 
@@ -494,14 +519,26 @@ export default function Console() {
             />
           </label>
 
-          <label className="field grow">
-            <span className="label">document (JSON, stored verbatim)</span>
-            <textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              spellCheck={false}
-            />
-          </label>
+          <div className="field grow">
+            <span className="label">{DOCUMENT_LABEL}</span>
+            <JsonEditor ref={editor} value={body} label={DOCUMENT_LABEL} onChange={setBody} />
+          </div>
+
+          {lint.ok ? (
+            <p className="lint good">valid JSON · {lint.summary}</p>
+          ) : (
+            <p className="lint bad">
+              <button
+                className="goto"
+                onClick={() => editor.current?.focusOffset(lint.error.offset)}
+                title="Put the cursor on the problem"
+              >
+                line {lint.error.line}, column {lint.error.column}
+              </button>
+              {" — "}
+              {lint.error.message}
+            </p>
+          )}
 
           <div className="row">
             <button
@@ -530,6 +567,13 @@ export default function Console() {
               title="Undo unsaved edits — back to what the last load or save stored"
             >
               Revert
+            </button>
+            <button
+              onClick={format}
+              disabled={busy || !lint.ok}
+              title="Re-indent with 2 spaces — whitespace only; Save (⌘/Ctrl+S) stores the bytes you see"
+            >
+              Format
             </button>
             <span className="muted">{byteLength(body)} bytes</span>
             {dirty && (
@@ -651,14 +695,6 @@ async function describe(res: Response): Promise<string> {
   const text = (await res.text()).trim();
   const detail = text.length > 0 ? ` — ${text.slice(0, 300)}` : "";
   return `HTTP ${res.status} ${res.statusText}${detail}`;
-}
-
-function pretty(text: string): string {
-  try {
-    return JSON.stringify(JSON.parse(text), null, 2) + "\n";
-  } catch {
-    return text;
-  }
 }
 
 function byteLength(text: string): number {

@@ -26,7 +26,6 @@ body {
 
 code,
 input,
-textarea,
 button.id {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
@@ -309,8 +308,7 @@ button.mini.copied {
   color: var(--muted);
 }
 
-input,
-textarea {
+input {
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--line);
@@ -320,18 +318,59 @@ textarea {
   font-size: 13px;
 }
 
-input:focus,
-textarea:focus {
+input:focus {
   outline: 2px solid #cfe0d5;
   outline-offset: -1px;
   border-color: #b9d2c2;
 }
 
-textarea {
+/* The CodeMirror host (docs/009): the wrapper paints what the plain fields
+   paint — border, radius, focus ring — and CodeMirror fills the rest. */
+.editor-host {
   flex: 1;
   min-height: 240px;
-  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.editor-host:focus-within {
+  outline: 2px solid #cfe0d5;
+  outline-offset: -1px;
+  border-color: #b9d2c2;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+/* The wrapper's ring is the field's focus ring; CodeMirror's own dotted
+   outline would draw a second one. */
+.editor-host .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor-host .cm-scroller {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   line-height: 1.5;
+}
+
+/* Match the console's palette; CodeMirror's defaults are bluer. */
+.editor-host .cm-gutters {
+  background: #faf9f6;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.editor-host .cm-activeLine,
+.editor-host .cm-activeLineGutter {
+  background: #f4f2ee;
+}
+
+.editor-host .cm-tooltip {
+  font-size: 12px;
 }
 
 button:focus-visible,
@@ -345,6 +384,36 @@ button:focus-visible,
   min-height: 18px;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+/* The editor's own verdict, above the action row (docs/009): quiet while
+   valid, a position and a reason while not. No red border while typing —
+   half-written JSON is invalid for most keystrokes, and the strip is the
+   place that says so calmly. */
+.lint {
+  margin: 0;
+  min-height: 18px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.lint.good {
+  color: var(--good);
+}
+
+.lint.bad {
+  color: var(--bad);
+}
+
+/* "line 3, column 7" is a button: it moves the caret to the problem. */
+button.goto {
+  font: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .status.good {
@@ -543,7 +612,7 @@ button:focus-visible,
     max-height: 32vh;
   }
 
-  textarea {
+  .editor-host {
     min-height: 200px;
   }
 }
