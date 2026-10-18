@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace CrowDB.Server.Endpoints;
 
-// Step 3 (docs/004): a maintenance verb — rewrite the log as only its live
+// Step 3 (docs/003): a maintenance verb — rewrite the log as only its live
 // records so dead puts and tombstones stop occupying disk. 204, no body; the
 // engine logs the before/after byte counts.
 public static class Compact

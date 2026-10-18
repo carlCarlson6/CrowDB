@@ -1,6 +1,6 @@
-# 004 — Step 3: compaction → atomic rename
+# 003 — Step 3: compaction → atomic rename
 
-*2026-10-17 · Follows [001 — Storage layout](001-storage-layout-options.md) (§3.5 "the file only grows", §3.12) and closes the tombstone footprint of [003 — Step 2](003-step-2-tombstones.md). Status: **contract written (red) — implementation pending**; the tests in both suites define the behavior below.*
+*2026-10-17 · Follows [000 — Storage layout](000-storage-layout-options.md) (§3.5 "the file only grows", §3.12) and closes the tombstone footprint of [002 — Step 2](002-step-2-tombstones.md). Status: **contract written (red) — implementation pending**; the tests in both suites define the behavior below.*
 
 **Concept of this step:** **compaction** — rewriting the log so it contains only the live records, then swapping the new file into place with one atomic rename. Appends created the garbage (dead puts, tombstones); compaction is the cleanup. It is also where the first real concurrency questions arrive: the file handle and the index become things readers depend on, not just things writes own.
 
@@ -12,7 +12,7 @@ The log has no forget function. Every step so far profits from that — and pays
 - a **delete** appends a tombstone whose only job is to cancel older records;
 - a **torn tail** is skipped by replay and sits in the file forever.
 
-Space grows with the number of *writes*, not the number of *documents*: a store that overwrites one document a million times is a gigabyte file holding one record. That is the family's signature trade (001 §3.5) — buy crash-simplicity with space — and compaction is how the bill gets paid.
+Space grows with the number of *writes*, not the number of *documents*: a store that overwrites one document a million times is a gigabyte file holding one record. That is the family's signature trade (000 §3.5) — buy crash-simplicity with space — and compaction is how the bill gets paid.
 
 The design insight: **the index is the compaction plan.** Every id in the index is live by definition, and every offset that ever left the index (dead puts, tombstones) is exactly the set to reclaim. No garbage scan, no timestamps, no reference counting: copy what the index points at, drop the rest.
 

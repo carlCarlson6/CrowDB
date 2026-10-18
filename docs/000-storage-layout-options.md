@@ -1,8 +1,8 @@
-# 001 — Storage layout: options report
+# 000 — Storage layout: options report
 
 *Revision 3 · 2026-10-15 · Status: decided — Option A (JSONL log + RAM index). Architecture, ids, API, and storage layout all locked (see the decision note below and §7).*
 
-> **Decision (2026-10-15).** Option A — append-only JSONL log + in-memory index — is chosen, with both concessions from §6: a version field in every envelope from record one, and all encoding hidden behind a single `RecordCodec` class. Option C (binary frames + CRC32) is deferred to its earned roadmap slot (step 4) as a migration from the v1 text format. Implementation plan: [002 — Step 1 plan](002-step-1-plan.md).
+> **Decision (2026-10-15).** Option A — append-only JSONL log + in-memory index — is chosen, with both concessions from §6: a version field in every envelope from record one, and all encoding hidden behind a single `RecordCodec` class. Option C (binary frames + CRC32) is deferred to its earned roadmap slot (step 4) as a migration from the v1 text format. Implementation plan: [001 — Step 1 plan](001-step-1-plan.md).
 
 *Both remaining options belong to the same family — log-structured storage — and differ only in how each record is encoded on disk. (A third candidate, one small file per document, was dropped: it delegates placement, retrieval, mutation, and crash safety wholesale to the filesystem, leaving no engine internals to build.)*
 

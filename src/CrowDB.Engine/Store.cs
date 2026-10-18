@@ -2,34 +2,39 @@ using Microsoft.Extensions.Logging;
 
 namespace CrowDB.Engine;
 
-// TODO - resolve lock on filestream - "The field is sometimes used inside synchronized block and sometimes used without synchronization"
-
 public sealed class Store : IDisposable
 {
     private readonly string _path;
     private FileStream _logFileStream;
     private readonly ILogger<Store> _logger;
     private readonly IdsIndex _idsIndex;
+    private readonly Lock _lock = new();
     
     public Store(string path, ILogger<Store> logger)
     {
-        _path = path;
-        File.Open(path, FileMode.OpenOrCreate).Close();
-        _logger = logger;
-        _idsIndex = new IdsIndex(path);
-        _logFileStream = File.Open(path, FileMode.OpenOrCreate);
+        lock (_lock)
+        {
+            _path = path;
+            File.Open(path, FileMode.OpenOrCreate).Close();
+            _logger = logger;
+            _idsIndex = new IdsIndex(path);
+            _logFileStream = File.Open(path, FileMode.OpenOrCreate);    
+        }
     }
 
     public bool TryGet(string id, out ReadOnlyMemory<byte> document)
     {
-        if (!_idsIndex.TryGetValue(id, out var offset))
+        lock (_lock)
         {
-            document = default;
-            return false;
-        }
+            if (!_idsIndex.TryGetValue(id, out var offset))
+            {
+                document = default;
+                return false;
+            }
 
-        var recordSegment = _logFileStream.ReadRecordSegment(offset);
-        document = Record.Decode(recordSegment).ToMemoryDoc();
+            var recordSegment = _logFileStream.ReadRecordSegment(offset);
+            document = Record.Decode(recordSegment).ToMemoryDoc();    
+        }
         
         return true;
     }
@@ -40,25 +45,28 @@ public sealed class Store : IDisposable
         
         _logger.LogInformation("STORE.PUT - {doc}", record.ToString());
         
-        lock (_logFileStream)  // TODO - duplicated on PUT - unify
+        lock (_lock)
         {
             var offset = _logFileStream.WriteRecord(record);
             _idsIndex[id] = offset;
         }
     }
     
-    public IReadOnlyList<string> ListIds() => _idsIndex.Keys.ToList().AsReadOnly();
+    public IReadOnlyList<string> ListIds()
+    {
+        lock (_lock) return _idsIndex.Keys.ToList().AsReadOnly();
+    }
 
     public bool Delete(string id)
     {
         _logger.LogInformation("STORE.DELETE - {id}", id);
-        
-        var found = _idsIndex.TryGetValue(id, out var offset);
-        if (!found) return false;
 
-        try
+        lock (_lock)
         {
-            lock (_logFileStream)
+            var found = _idsIndex.TryGetValue(id, out var offset);
+            if (!found) return false;
+
+            try
             {
                 var recordSegment = _logFileStream.ReadRecordSegment(offset);
                 var deletedRecord = Record
@@ -68,11 +76,11 @@ public sealed class Store : IDisposable
                 _logFileStream.WriteRecord(deletedRecord);
                 _idsIndex.Remove(id);
             }
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Error deleting record - {id}", id);
-            return false;
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Error deleting record - {id}", id);
+                return false;
+            }
         }
         
         return true;
@@ -80,20 +88,18 @@ public sealed class Store : IDisposable
     
     public void Compact()
     {
-        lock (_logFileStream)
+        lock (_lock)
         { 
             var compactFilePath = $"{_path}.compact";
             var compactFileStream = File.Open(compactFilePath, FileMode.Create);
-            
-            foreach (var offset in _idsIndex.Values)
-            {
-                var recordSegment = _logFileStream.ReadRecordSegment(offset);
-                var record = Record.Decode(recordSegment);
+            _logFileStream.Close();
+            _logFileStream.Dispose();
+
+            var allRecords = FileStreamExtensions.ReadAllLiveRecords(_path);
+            foreach (var (record, _) in allRecords)
                 compactFileStream.WriteRecord(record);
-            }
             
             compactFileStream.Close();
-            _logFileStream.Close();
             
             File.Move(compactFilePath, _path, overwrite: true);
             _idsIndex.Recreate();
@@ -103,7 +109,10 @@ public sealed class Store : IDisposable
 
     public void Dispose()
     {
-        _logFileStream.Close();
-        _logFileStream.Dispose();
+        lock (_lock)
+        {
+            _logFileStream.Close();
+            _logFileStream.Dispose();
+        }
     }
 }

@@ -1,10 +1,13 @@
+using System.Text;
+using System.Text.Json;
+using static CrowDB.Engine.Kind;
 using Offset = long;
 
 namespace CrowDB.Engine;
 
 public static class FileStreamExtensions
 {
-    public static byte[] ReadRecordSegment(this FileStream fileStream, long offset)
+    public static byte[] ReadRecordSegment(this FileStream fileStream, Offset offset)
     {
         fileStream.Seek(offset, SeekOrigin.Begin);
 
@@ -27,6 +30,43 @@ public static class FileStreamExtensions
         }
         
         return record.ToArray();
+    }
+
+    public static IEnumerable<(Record record, Offset offset)> ReadAllLiveRecords(string path) =>
+        ReadAllFile(path)
+            .GroupBy(x => x.record.Id)
+            .Select(group => group
+                .MaxBy(y => y.offset))
+            .Where(x => x.record.Kind != DELETE)
+            .OrderBy(x => x.offset);
+
+    private static List<(Record record, Offset offset)> ReadAllFile(string path)
+    {
+        var allText = File.ReadAllText(path);
+        var allLines = allText.Split("\n");
+        var lastSumOffset = 0;
+        var records = new List<(Record record, Offset offset)>();
+        
+        foreach (var line in allLines)
+        {
+            try
+            {
+                var record = JsonSerializer.Deserialize<Record>(line);
+                if (record is null) throw new Exception("Could not deserialize record");
+                
+                records.Add((record, lastSumOffset));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            finally
+            {
+                lastSumOffset += Encoding.UTF8.GetByteCount(line+"\n");
+            }
+        }
+        
+        return records;
     }
 
     public static Offset WriteRecord(this FileStream fileStream, Record record)

@@ -268,11 +268,11 @@ public class CompactionTests(ITestOutputHelper output)
     [Fact]
     public async Task GIVEN_writers_readers_and_a_compactor_running_at_the_same_time_WHEN_they_finish_THEN_the_state_is_exact_and_nothing_threw()
     {
-        // The first concurrency question (docs/004 §4.5): a compaction swaps the
+        // The first concurrency question (docs/003 §4.5): a compaction swaps the
         // file handle and every offset while readers and writers are in flight.
         // One lock for all operations is the answer this step expects.
         using var temp = new TempDirectory();
-        using var store = OpenStore(temp.LogFile, output);
+        var store = OpenStore(temp.LogFile, output);
 
         var ids = Enumerable.Range(0, 6).Select(i => $"doc:{i}").ToArray();
         foreach (var id in ids)
@@ -344,6 +344,8 @@ public class CompactionTests(ITestOutputHelper output)
             Assert.Equal(Doc(id, version: 10), Read(store, id)); // each id has one writer: v=10 is final
         Assert.Equal(ids.Length, store.ListIds().Count);
 
+        store.Dispose();
+        
         using (var reopened = OpenStore(temp.LogFile, output))
         {
             foreach (var id in ids)

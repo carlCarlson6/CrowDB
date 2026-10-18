@@ -1,13 +1,13 @@
-# 002 — Step 1 plan: append-only log + in-memory index (Option A)
+# 001 — Step 1 plan: append-only log + in-memory index (Option A)
 
-*2026-10-15 · Follows the decision in [001 — Storage layout](001-storage-layout-options.md): Option A. Status: **done — implemented 2026-10-16**; a few details differ from the plan and are recorded under [As built](#as-built-2026-10-16) at the end.*
+*2026-10-15 · Follows the decision in [000 — Storage layout](000-storage-layout-options.md): Option A. Status: **done — implemented 2026-10-16**; a few details differ from the plan and are recorded under [As built](#as-built-2026-10-16) at the end.*
 
 **Concept of this step:** log-structured storage — an append-only log as the source of truth, an in-memory index as derived data, and recovery by replaying the log at startup.
 
 ## What is already in place
 
 - `CrowDB.sln` with `src/CrowDB.Engine` (class library, no web dependencies), `src/CrowDB.Server` (Minimal API), `tests/CrowDB.Engine.Tests` (xUnit).
-- `CrowDB.Server` implements the four locked endpoints (§7 of doc 001) against the locked `DocumentStore` surface. It validates that request bodies are JSON and then hands raw bytes to the engine — the engine never parses documents.
+- `CrowDB.Server` implements the four locked endpoints (§7 of doc 000) against the locked `DocumentStore` surface. It validates that request bodies are JSON and then hands raw bytes to the engine — the engine never parses documents.
 - `portal/` — a Next.js debug console: list ids, open a document, edit and save (`PUT`), create under a server-generated id (`POST`). It reaches the API through a same-origin rewrite (`/api/*` → `http://localhost:5217/*`).
 - `DocumentStore` is a skeleton whose members throw `NotImplementedException`. **That is the work of this step.** The server cannot serve a request until the engine works.
 - `tests/CrowDB.Engine.Tests/` and `tests/CrowDB.Server.Tests/` hold the step's contract: engine tests against the locked `DocumentStore` surface, API tests against the real server in-process. They are red today (the store throws) and turn green when the engine is correct — there is nothing to unskip.
@@ -42,7 +42,7 @@ Black-box at both levels; every test is named `GIVEN_..._WHEN_..._THEN_...`. The
 - **Offset types.** Byte offsets are `long`; make the index, the seek, and the file math agree.
 - **Who guarantees the document is valid JSON.** The HTTP layer validates before calling the engine; the engine trusts the bytes. If invalid bytes reached the log anyway, replay would read them as a torn tail and *later* records would be lost — this is the honest cost of Option A's heuristic ("does it parse?").
 - **Tail policy.** Ignore the first unparseable line (assume a torn write). Mid-file garbage cannot happen under the write model; define what you do if it does.
-- **File sharing.** Open with the smallest options you can justify (`FileShare.Read` lets `cat` the log while the server runs; per doc 001 §3.8, keep user-space buffering out of the way).
+- **File sharing.** Open with the smallest options you can justify (`FileShare.Read` lets `cat` the log while the server runs; per doc 000 §3.8, keep user-space buffering out of the way).
 - **Concurrency.** One lock around the read/write path for now — the simplest thing that is correct.
 
 ## Done when

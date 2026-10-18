@@ -28,7 +28,7 @@ CrowDB/
    - **engine tests** (`tests/CrowDB.Engine.Tests/`) drive `Store` directly, including recovery and the on-disk format;
    - **API tests** (`tests/CrowDB.Server.Tests/`) drive the HTTP contract through the real server in-process (`WebApplicationFactory`, one throwaway data directory per test).
    A step is done when both suites are green — starting with recovery: write → close → reopen → read, plus torn-tail tolerance.
-6. **Decisions are documented options, not silent choices.** For non-trivial design points, present options with tradeoffs — `docs/001-storage-layout-options.md` is the model.
+6. **Decisions are documented options, not silent choices.** For non-trivial design points, present options with tradeoffs — `docs/000-storage-layout-options.md` is the model.
 7. **Standard library first.** New NuGet/npm packages need a concrete justification tied to the current step.
 
 ## Locked decisions (step 1)
@@ -37,12 +37,12 @@ CrowDB/
 - **API:** `PUT /docs/{id}` (client-chosen string id), `GET /docs/{id}`, `GET /docs` (list ids), `POST /docs` (server-generated Guid id).
 - **Engine surface (as built):** `Store` with `TryGet(id, out bytes)`, `Put(id, bytes)`, `ListIds()`; documents as `ReadOnlyMemory<byte>`. The constructor takes the **log file path** and an `ILogger<Store>` — the caller owns the directory.
 - **Logging:** the engine depends on `Microsoft.Extensions.Logging.Abstractions` only (interface-only contract, keeps the engine web-free) — its sole package. The server hands the store the host's logger (console in development; levels in `appsettings*.json`); both test suites hand it a logger that writes into the failing test's output, so a red test shows what the store was doing.
-- **Disk format (as built):** Option A from `docs/001` — append-only JSONL log + in-memory `id → offset` index; all encoding lives in the `Record` class. Envelope `{"Version":"1","Id":...,"Doc":...,"Kind":...}`, one line per record — `Doc` is the document as a JSON string (escaped by `System.Text.Json`, byte-exact on round-trip; the engine never parses document content), and `Kind` is `"PUT"` or `"DELETE"` (a missing `Kind` reads as PUT, so pre-tombstone logs stay valid). Tombstones are `"Kind":"DELETE"` with the sentinel `"Doc":"--DELETED--"` — `docs/003`'s recommended null-`Doc` shape was not taken; the explicit kind was chosen instead (see the as-built note in `docs/003`). Replay **skips unparseable lines and keeps going**, rather than stopping at the first one. Option C lands in step 4 as a v1→v2 migration.
+- **Disk format (as built):** Option A from `docs/000` — append-only JSONL log + in-memory `id → offset` index; all encoding lives in the `Record` class. Envelope `{"Version":"1","Id":...,"Doc":...,"Kind":...}`, one line per record — `Doc` is the document as a JSON string (escaped by `System.Text.Json`, byte-exact on round-trip; the engine never parses document content), and `Kind` is `"PUT"` or `"DELETE"` (a missing `Kind` reads as PUT, so pre-tombstone logs stay valid). Tombstones are `"Kind":"DELETE"` with the sentinel `"Doc":"--DELETED--"` — `docs/002`'s recommended null-`Doc` shape was not taken; the explicit kind was chosen instead (see the as-built note in `docs/002`). Replay **skips unparseable lines and keeps going**, rather than stopping at the first one. Option C lands in step 4 as a v1→v2 migration.
 - **Durability:** fsync (`Flush(true)`) per write for now (group commit is step 7).
-- **Concurrency:** the append path takes the store lock for now (lock-free reads are step 6). **As built, reads don't take it** — see Open above.
+- **Concurrency (as built, step 3):** one private readonly `System.Threading.Lock`, taken by every operation — reads included — because compaction swaps both the file handle and the index (`docs/003` §4.5); lock-free reads are step 6. The log is held with `FileShare.None`: reopening a log requires disposing its store first.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 3 — compaction (space reclamation). Contract written, tests red — engine implementation pending; see `docs/004` and `tests/CrowDB.Engine.Tests/CompactionTests.cs`. Carried over from step 1: the lock is only taken on the write path — `TryGet`/`ListIds` read the shared file handle and index unguarded (the owner flagged it in `Store.cs`); the step-3 contract requires fixing this with one lock for all operations, because compaction swaps both the handle and the index (docs/004 §4.5).
+**Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract not written yet. Carried over from step 3: `ListIds()` reads the index without the lock — no test calls it concurrently, but the server can (`GET /docs` while `POST /compact` runs); it should take the same lock (one line).
 
 ## Working protocol
 
@@ -59,8 +59,8 @@ CrowDB/
 
 1. **POC** — append-only log + id index; store/read/list by id; minimal API; minimal portal. *(done — Option A as built, suites green)*
 2. Deletes → tombstones (why logs can't just forget). *(done — Kind-based tombstones, suites green)*
-3. Compaction → atomic rename; space reclamation; first concurrency questions. *(current)*
-4. Binary format v2 + CRC32 → framing, integrity, format migration.
+3. Compaction → atomic rename; space reclamation; first concurrency questions. *(done — compaction under one store-wide lock, suites green)*
+4. Binary format v2 + CRC32 → framing, integrity, format migration. *(current)*
 5. On-disk sorted index → range scans; dense vs sparse index choices.
 6. Lock-free reads → positional I/O, the immutability dividend.
 7. Group commit + benchmarks → the durability/throughput tradeoff.
@@ -68,8 +68,8 @@ CrowDB/
 
 ## Reference
 
-- `docs/001-storage-layout-options.md` — step-1 storage decision: two options with full explanations, roadmap mapping, and a concepts appendix.
-- `docs/002-step-1-plan.md` — step-1 build order for the engine (log, index, replay, torn tail) and its test list.
-- `docs/003-step-2-tombstones.md` — step-2 design record: why deletes are writes, the tombstone shape options, and the written-first contract.
-- `docs/004-step-3-compaction-options.md` — step-3 design record: the compaction algorithm, atomic rename, crash windows, the one-lock decision, and the written-first contract.
+- `docs/000-storage-layout-options.md` — step-1 storage decision: two options with full explanations, roadmap mapping, and a concepts appendix.
+- `docs/001-step-1-plan.md` — step-1 build order for the engine (log, index, replay, torn tail) and its test list.
+- `docs/002-step-2-tombstones.md` — step-2 design record: why deletes are writes, the tombstone shape options, and the written-first contract.
+- `docs/003-step-3-compaction-options.md` — step-3 design record: the compaction algorithm, atomic rename, crash windows, the one-lock decision, and the written-first contract.
 - `README.md` — project intentions and status.

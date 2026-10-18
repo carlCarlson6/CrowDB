@@ -1,6 +1,6 @@
-# 003 — Step 2: deletes → tombstones
+# 002 — Step 2: deletes → tombstones
 
-*2026-10-16 · Follows [001 — Storage layout](001-storage-layout-options.md) §3.6 and closes out [002 — Step 1 plan](002-step-1-plan.md). Status: **done — implemented 2026-10-17**; the shipped record shape is an explicit `Kind` field, not the recommended null `Doc` — see [As built](#as-built-2026-10-17) at the end.*
+*2026-10-16 · Follows [000 — Storage layout](000-storage-layout-options.md) §3.6 and closes out [001 — Step 1 plan](001-step-1-plan.md). Status: **done — implemented 2026-10-17**; the shipped record shape is an explicit `Kind` field, not the recommended null `Doc` — see [As built](#as-built-2026-10-17) at the end.*
 
 **Concept of this step:** the **tombstone** — a record whose only job is to say "this id is deleted". It is the step-1 lesson seen from the other side: the log is the source of truth, so *forgetting* something is itself a write.
 
@@ -30,11 +30,11 @@ public bool Delete(string id);
 
 Why `bool` and not `void`: the server maps it straight to HTTP — `true` → `204 No Content`, `false` → `404 Not Found` — without a check-then-delete dance in the router, and the "did it exist?" answer stays inside the same lock as the write.
 
-**API addition for this step:** `DELETE /docs/{id}` → `204` when the id was deleted, `404` when unknown. Deleting an already-deleted id is a `404`, same as any unknown id. This joins the endpoint list locked in 001 §7.
+**API addition for this step:** `DELETE /docs/{id}` → `204` when the id was deleted, `404` when unknown. Deleting an already-deleted id is a `404`, same as any unknown id. This joins the endpoint list locked in 000 §7.
 
 ## 3. The record shape — options
 
-The as-built envelope (002) is `{"Version":"1","Id":...,"Doc":...}`, one line per record. A tombstone needs a representation on disk. Three candidates:
+The as-built envelope (001) is `{"Version":"1","Id":...,"Doc":...}`, one line per record. A tombstone needs a representation on disk. Three candidates:
 
 ### Option A — `"Doc":null` (recommended)
 
@@ -53,7 +53,7 @@ The put path can never produce this: `Doc` is always a JSON *string* (empty docu
 {"Id":"user:1","Version":"1","Doc":null,"Deleted":true}
 ```
 
-What 001 §3.6 sketched (in that era's envelope): a dedicated marker field. Self-describing and greppable; no reserved value.
+What 000 §3.6 sketched (in that era's envelope): a dedicated marker field. Self-describing and greppable; no reserved value.
 
 - **Pros:** declared, not implied; immune to any future `Doc` null-ness.
 - **Cons:** a serialization policy to design (omit the field when false? then encoding becomes conditional), plus a conflict rule for the impossible-but-say-it line `"Doc":{...},"Deleted":true`. More machinery than the step needs.

@@ -7,8 +7,8 @@ using static CrowDB.Server.Tests.ApiTestSupport;
 namespace CrowDB.Server.Tests;
 
 /// <summary>
-/// The HTTP contract of CrowDB.Server: the locked endpoints (docs/001 §7, plus
-/// the DELETE added in docs/003), their status codes, and the fact that
+/// The HTTP contract of CrowDB.Server: the locked endpoints (docs/000 §7, plus
+/// the DELETE added in docs/002), their status codes, and the fact that
 /// documents travel as raw bytes. The server is the real thing running
 /// in-process; only the data directory is temporary.
 /// </summary>
@@ -145,7 +145,7 @@ public class DocsApiTests(ITestOutputHelper output)
     {
         using var server = new CrowDbServer(output);
 
-        // The on-disk format is the contract (docs/001 §3): a previous process
+        // The on-disk format is the contract (docs/000 §3): a previous process
         // can leave a valid log behind, and a restart must serve it.
         await File.WriteAllTextAsync(server.LogFile,
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}"""+"\n");
@@ -218,7 +218,7 @@ public class DocsApiTests(ITestOutputHelper output)
     {
         using var server = new CrowDbServer(output);
 
-        // The on-disk format is the contract (docs/003 §3): a previous process
+        // The on-disk format is the contract (docs/002 §3): a previous process
         // can leave a tombstoned log behind, and a restart must serve it that way.
         await File.WriteAllTextAsync(server.LogFile, string.Join('\n', new[]
         {

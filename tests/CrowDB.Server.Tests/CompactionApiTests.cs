@@ -7,7 +7,7 @@ using static CrowDB.Server.Tests.ApiTestSupport;
 namespace CrowDB.Server.Tests;
 
 /// <summary>
-/// The HTTP contract of compaction (docs/004): <c>POST /compact</c> rewrites the
+/// The HTTP contract of compaction (docs/003): <c>POST /compact</c> rewrites the
 /// log as only its live records and answers <c>204</c>; the server keeps
 /// serving, and the compacted file remains a valid log for the next start.
 /// </summary>

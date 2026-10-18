@@ -47,8 +47,8 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 |---|---|---|
 | 1 | Store & read documents by id (HTTP + portal) | append-only log, index, crash recovery |
 | 2 | Delete documents | tombstones |
-| 3 | Shrink the log | compaction, atomic rename ← *current* |
-| 4 | Binary record format | framing, CRC32, format migration |
+| 3 | Shrink the log | compaction, atomic rename |
+| 4 | Binary record format | framing, CRC32, format migration ← *current* |
 | 5 | Outgrowing RAM | on-disk sorted index, range scans |
 | 6 | Concurrent reads | immutability, positional I/O |
 | 7 | Write throughput | group commit, benchmarking |
@@ -58,8 +58,8 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 
 **Step 1 is complete.** The engine implements Option A — append-only JSONL log + in-memory `id → offset` index, recovery by replay, torn-tail tolerance — behind `Store` (`TryGet`/`Put`/`ListIds`); the API and portal are built on it, and both suites are green (26 engine + 10 API tests). Data survives a server restart.
 
-**Step 2 is complete.** Deletes are tombstones: a log can't remove a record, so a delete is another write that replay applies in order. Engine, `DELETE /docs/{id}`, and both suites are green (38 engine + 15 API tests); deletions survive restarts, and the portal can delete. Design record: [003 — Step 2: tombstones](docs/003-step-2-tombstones.md).
+**Step 2 is complete.** Deletes are tombstones: a log can't remove a record, so a delete is another write that replay applies in order. Engine, `DELETE /docs/{id}`, and both suites are green (38 engine + 15 API tests); deletions survive restarts, and the portal can delete. Design record: [002 — Step 2: tombstones](docs/002-step-2-tombstones.md).
 
-**Step 3 is in progress.** The compaction contract is written — `Store.Compact()` + `POST /compact`, red until the engine implements them — with its design record: [004 — Step 3: compaction](docs/004-step-3-compaction-options.md).
+**Step 3 is complete.** `Store.Compact()` rewrites the log as only its live records and swaps it in with one atomic rename; one store-wide lock covers every operation, so writers, readers, and compaction can run at the same time without losing state. `POST /compact` exposes it, and both suites are green (48 engine + 18 API tests). Design record: [003 — Step 3: compaction](docs/003-step-3-compaction-options.md).
 
 **Next after step 3:** step 4 — binary format v2 + CRC32 (framing, integrity, the v1→v2 migration).

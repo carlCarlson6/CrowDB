@@ -18,7 +18,7 @@ internal sealed class CrowDbServer(ITestOutputHelper output) : WebApplicationFac
     /// <summary>The data directory this instance's engine writes to (created up front).</summary>
     public string DataDirectory => _dataDirectory.Root;
 
-    /// <summary>The log file inside <see cref="DataDirectory"/> (docs/001 §3).</summary>
+    /// <summary>The log file inside <see cref="DataDirectory"/> (docs/000 §3).</summary>
     public string LogFile => _dataDirectory.LogFile;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

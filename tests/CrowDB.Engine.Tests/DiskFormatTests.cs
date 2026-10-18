@@ -5,7 +5,7 @@ using static CrowDB.Engine.Tests.TestSupport;
 namespace CrowDB.Engine.Tests;
 
 /// <summary>
-/// The on-disk contract of Option A (docs/001 §3): one <c>crowdb.log</c>, one
+/// The on-disk contract of Option A (docs/000 §3): one <c>crowdb.log</c>, one
 /// envelope per line, old bytes never modified — appends only. The log is the
 /// source of truth, so these tests read it directly.
 /// </summary>
@@ -95,7 +95,7 @@ public class DiskFormatTests(ITestOutputHelper output)
         using var put = JsonDocument.Parse(lines[0]);
         Assert.Contains("Ada", put.RootElement.GetProperty("Doc").GetString());
 
-        // The tombstone is an envelope whose Doc is JSON null (docs/003 §3).
+        // The tombstone is an envelope whose Kind is DELETE and Doc is the sentinel (docs/002 §3).
         using var tombstone = JsonDocument.Parse(lines[1]);
         Assert.Equal("1", tombstone.RootElement.GetProperty("Version").ToString());
         Assert.Equal("user:1", tombstone.RootElement.GetProperty("Id").GetString());
