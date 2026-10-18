@@ -14,16 +14,16 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// API key authentication (docs/005): the key is a deployment credential, so
-// outside Development it is mandatory — a deployment that forgot it must not
-// quietly serve everyone. Development may run open for `dotnet run` and the
-// portal; that case is warned about below.
+// API key authentication (docs/005, amended by docs/007): the key is a
+// deployment credential in every environment — no server serves
+// unauthenticated data, so local `dotnet run` needs CROWDB__APIKEY just like
+// the container does (the README shows the one-liner). A start without a key
+// fails fast instead of quietly serving everyone.
 var apiKey = builder.Configuration["CrowDB:ApiKey"];
-if (string.IsNullOrWhiteSpace(apiKey) && !builder.Environment.IsDevelopment())
+if (string.IsNullOrWhiteSpace(apiKey))
     throw new InvalidOperationException(
-        "CrowDB:ApiKey is required outside the Development environment: every request must be " +
-        "authenticated. Set it (for example with the CROWDB__APIKEY environment variable) or " +
-        "run in Development.");
+        "CrowDB:ApiKey is required: every request must be authenticated. " +
+        "Set it, for example with the CROWDB__APIKEY environment variable.");
 
 // The engine keeps everything in one log file inside this directory. The value
 // in appsettings.json ("../../data") resolves to the repo-root data/ directory.
@@ -49,14 +49,10 @@ builder.Services
 // themselves.
 builder.Services.AddOpenApi(options =>
 {
-    // The document mirrors the deployment shape (docs/006 §3): when a key is
-    // configured, every operation is documented as requiring the X-Api-Key
-    // scheme, so Scalar's authentication panel carries the key into the "try
-    // it" requests. Unset (Development), the same document shows no security —
-    // anything else would describe a server that isn't there.
-    if (string.IsNullOrWhiteSpace(apiKey))
-        return;
-
+    // The document mirrors the deployment shape (docs/006 §3): a key is
+    // always configured (docs/007), so every operation is documented as
+    // requiring the X-Api-Key scheme — Scalar's authentication panel carries
+    // the key into the "try it" requests.
     options.AddDocumentTransformer((document, _, _) =>
     {
         document.Components ??= new OpenApiComponents();
@@ -102,15 +98,10 @@ forwardedHeaders.KnownNetworks.Clear();
 forwardedHeaders.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeaders);
 
-// UseApiKey is a no-op without a key; saying which mode the server is in
-// matters more than the middleware itself when something gets deployed.
-if (string.IsNullOrWhiteSpace(apiKey))
-    app.Logger.LogWarning(
-        "CrowDB:ApiKey is not set — every request is served without credentials. " +
-        "Set it to require the {Header} header.", ApiKeyAuthentication.HeaderName);
-else
-    app.Logger.LogInformation(
-        "API key authentication is enabled ({Header}).", ApiKeyAuthentication.HeaderName);
+// The constructor above guarantees a key, so the server has exactly one
+// mode; logging which one it is matters the day another appears.
+app.Logger.LogInformation(
+    "API key authentication is enabled ({Header}).", ApiKeyAuthentication.HeaderName);
 
 app.UseApiKey(apiKey);
 

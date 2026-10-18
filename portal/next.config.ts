@@ -1,20 +1,13 @@
 import type { NextConfig } from "next";
 
+// The portal reaches CrowDB.Server through app/api/[...path]/route.ts, which
+// reads CROWDB_API_URL per request (docs/007). It is deliberately not a
+// rewrite here: next.config rewrites are compiled into the build's routes —
+// swapping a deployment's API URL would need a rebuild, not a restart.
+
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
-
-  // The portal runs on :3000 and talks to CrowDB.Server on :5217 through this
-  // same-origin rewrite: no CORS setup, and no API URL in client code.
-  // If the server port changes, change this destination too.
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:5217/:path*",
-      },
-    ];
-  },
 };
 
 export default nextConfig;

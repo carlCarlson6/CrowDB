@@ -15,8 +15,8 @@ cat <<EOF
 
 Built $image.
 
-Run it with a key — outside Development the server refuses to start without
-one — and a data volume:
+Run it with a key — the server refuses to start without one (docs/007) —
+and a data volume:
 
   export KEY=\$(openssl rand -hex 32)
   docker run --rm -p 5217:8080 -e CrowDB__ApiKey="\$KEY" -v crowdb-data:/data $image

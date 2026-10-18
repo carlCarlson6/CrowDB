@@ -14,6 +14,13 @@ namespace CrowDB.Server.Tests;
 /// </summary>
 internal sealed class CrowDbServer : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// The key every server gets unless a test says otherwise (docs/007): the
+    /// API requires one in every environment, so "serve without credentials" is
+    /// no longer a shape a test can accidentally exercise.
+    /// </summary>
+    public const string TestKey = "test-key";
+
     private readonly ITestOutputHelper _output;
     private readonly TempDirectory _dataDirectory;
     private readonly bool _ownsDirectory;
@@ -21,15 +28,15 @@ internal sealed class CrowDbServer : WebApplicationFactory<Program>
     private readonly string _environment;
 
     /// <summary>A server over its own throwaway directory, or over one the caller keeps alive.</summary>
-    /// <param name="apiKey">The value of <c>CrowDB:ApiKey</c>; null leaves it unset (docs/005).</param>
-    /// <param name="environment">
-    /// The hosting environment. Development (the default) is the only one allowed
-    /// to run without a key; anything else refuses to start (docs/005 §3).
+    /// <param name="apiKey">
+    /// The value of <c>CrowDB:ApiKey</c>; null leaves it unset, which every
+    /// environment refuses to start from (docs/007).
     /// </param>
+    /// <param name="environment">The hosting environment — no longer changes the key rule.</param>
     public CrowDbServer(
         ITestOutputHelper output,
         TempDirectory? dataDirectory = null,
-        string? apiKey = null,
+        string? apiKey = TestKey,
         string environment = "Development")
     {
         _output = output;
@@ -47,9 +54,8 @@ internal sealed class CrowDbServer : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        // Pin the environment so the suites never inherit the machine's (the
-        // auth rule keys off it, docs/005 §3) and hand the API key in like
-        // appsettings/`CROWDB__APIKEY` would.
+        // Pin the environment so the suites never inherit the machine's, and
+        // hand the API key in like appsettings/`CROWDB__APIKEY` would.
         builder.UseEnvironment(_environment);
         if (_apiKey is not null)
             builder.UseSetting("CrowDB:ApiKey", _apiKey);

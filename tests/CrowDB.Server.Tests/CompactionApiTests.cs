@@ -17,7 +17,7 @@ public class CompactionApiTests(ITestOutputHelper output)
     public async Task GIVEN_overwrites_and_a_delete_WHEN_posting_compact_THEN_204_comes_back_and_dead_bytes_are_gone()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         await client.PutAsync(DocUrl("user:1"), Json("""{"version":1}"""));
         await client.PutAsync(DocUrl("user:1"), Json("""{"version":2}"""));
         await client.PutAsync(DocUrl("user:2"), Json("""{"name":"Grace"}"""));
@@ -42,7 +42,7 @@ public class CompactionApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_empty_server_WHEN_posting_compact_THEN_204_comes_back_and_writes_still_work()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.PostAsync("/compact", content: null);
 
@@ -72,7 +72,7 @@ public class CompactionApiTests(ITestOutputHelper output)
 
         using var server = new CrowDbServer(output);
         await File.WriteAllBytesAsync(server.LogFile, await File.ReadAllBytesAsync(temp.LogFile));
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var get = await client.GetAsync(DocUrl("user:1"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);

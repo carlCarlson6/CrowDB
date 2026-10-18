@@ -6,8 +6,8 @@
 # published app — no SDK, no sources, non-root.
 #
 # Configuration at run time:
-#   * CrowDB__ApiKey        required outside Development (docs/005 §3) —
-#                           the server refuses to start without it
+#   * CrowDB__ApiKey        always required (docs/007) — the server refuses
+#                           to start without it
 #   * CrowDB__DataDirectory  where crowdb.log lives; /data by default
 #   * PORT                   the port inside the container (default 8080);
 #                           publish it with -p 5217:8080 etc.

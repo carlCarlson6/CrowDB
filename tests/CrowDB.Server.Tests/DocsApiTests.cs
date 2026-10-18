@@ -20,7 +20,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_empty_server_WHEN_listing_documents_THEN_the_response_is_an_empty_json_array()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.GetAsync("/docs");
 
@@ -32,7 +32,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_put_document_WHEN_getting_it_THEN_the_bytes_come_back_verbatim()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         const string document = """{"name":"Ada","tags":["math","navy"],"note":"ü é 🚀"}""";
 
         var put = await client.PutAsync(DocUrl("user:1"), Json(document));
@@ -48,7 +48,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_put_document_WHEN_putting_a_newer_one_THEN_the_newest_wins()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         await client.PutAsync(DocUrl("user:1"), Json("""{"version":1}"""));
         var put = await client.PutAsync(DocUrl("user:1"), Json("""{"version":2}"""));
@@ -62,7 +62,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_two_documents_WHEN_listing_THEN_both_ids_are_returned()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
         await client.PutAsync(DocUrl("user:2"), Json("""{"name":"Grace"}"""));
@@ -76,7 +76,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_posted_document_WHEN_reading_the_response_THEN_a_generated_id_and_location_come_back()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.PostAsync("/docs", Json("""{"name":"generated"}"""));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -96,7 +96,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_unknown_id_WHEN_getting_it_THEN_the_response_is_404()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.GetAsync(DocUrl("missing"));
 
@@ -107,7 +107,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_body_that_is_not_json_WHEN_putting_THEN_the_response_is_400_and_nothing_is_stored()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.PutAsync(DocUrl("user:1"), Json("not json at all"));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -120,7 +120,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_empty_json_body_WHEN_posting_THEN_the_response_is_400()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         // The body is empty but declares JSON, so the content-type gate
         // (docs/006 §5) lets it through to the handler's JSON check.
@@ -136,7 +136,7 @@ public class DocsApiTests(ITestOutputHelper output)
         // content-type validation: text/plain is refused before the handler
         // ever reads the bytes (docs/006 §5).
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         var body = new StringContent("""{"name":"Ada"}""", Encoding.UTF8, "text/plain");
 
         var response = await client.PutAsync(DocUrl("user:1"), body);
@@ -149,7 +149,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_id_that_needs_url_encoding_WHEN_round_tripping_THEN_the_id_survives_exactly()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         const string id = "ünïcode id:🌍";
 
         var put = await client.PutAsync(DocUrl(id), Json("""{"ok":true}"""));
@@ -171,7 +171,7 @@ public class DocsApiTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(server.LogFile,
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}"""+"\n");
 
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var get = await client.GetAsync(DocUrl("user:1"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
@@ -183,7 +183,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_stored_document_WHEN_deleting_it_THEN_204_comes_back_and_it_is_gone_everywhere()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
 
         var delete = await client.DeleteAsync(DocUrl("user:1"));
@@ -197,7 +197,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_an_unknown_id_WHEN_deleting_it_THEN_the_response_is_404()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var response = await client.DeleteAsync(DocUrl("missing"));
 
@@ -208,7 +208,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_deleted_document_WHEN_deleting_it_again_THEN_the_response_is_404()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(DocUrl("user:1"))).StatusCode);
 
@@ -221,7 +221,7 @@ public class DocsApiTests(ITestOutputHelper output)
     public async Task GIVEN_a_deleted_id_WHEN_putting_it_again_THEN_it_is_stored_again()
     {
         using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
         await client.PutAsync(DocUrl("user:1"), Json("""{"version":1}"""));
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(DocUrl("user:1"))).StatusCode);
 
@@ -249,7 +249,7 @@ public class DocsApiTests(ITestOutputHelper output)
             """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:\u0022Grace\u0022}"}""",
         }) + "\n");
 
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(DocUrl("user:1"))).StatusCode);
         var grace = await client.GetAsync(DocUrl("user:2"));

@@ -96,7 +96,7 @@ The document also carries a `servers` entry — the URL the browser sends the "t
 - **415 now exists.** Write operations answer 415 for a non-JSON `Content-Type` and 400 for JSON-declared bodies that are not JSON. Both are per-handler truth, declared in the document.
 - **The document's title/version are the defaults** (`CrowDB.Server | v1`, `1.0.0`). Custom info, logos and themes are later decisions.
 - **401 responses are not declared per operation.** The gate is deployment infrastructure that runs before routing (docs/005); it stays prose, not OpenAPI.
-- **No portal link.** The portal stays a debug console; the reference lives at the server's own `/scalar`.
+- **No portal link.** The portal stays a debug console; the reference lives at the server's own `/scalar`. *(Amended 2026-10-18: the portal now renders the same document in its own `/api-docs` section — fetched from `/openapi/v1.json` through the portal's `/api` proxy route, without Scalar's interactivity; `/scalar` remains the full UI.)*
 - **The engine still knows nothing about any of this.** It stores bytes; HTTP metadata and XML comments are server-side concerns only.
 
 ## 10. Done when / out of scope

@@ -1,12 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-// The portal talks to CrowDB.Server through its own origin: next.config.ts
-// rewrites /api/* to http://localhost:5217/*. No CORS, no API URL here.
+// The portal talks to CrowDB.Server through its own origin: the proxy route
+// (app/api/[...path]/route.ts) forwards /api/* to CROWDB_API_URL, or to the
+// local server when the variable is unset. No CORS, no API URL in client code.
 const API = "/api";
 
+/** Where the visitor's key lives — this browser only (docs/007). */
+const KEY_STORAGE = "crowdb:api-key";
+
 type Status = { ok: boolean; text: string };
+
+/**
+ * Thrown when a request can't proceed for want of a working key: none stored,
+ * or the server answered 401. The console opens the key dialog; nothing about
+ * this is "offline".
+ */
+class Unauthorized extends Error {}
 
 export default function Console() {
   const [ids, setIds] = useState<string[]>([]);
@@ -18,21 +30,88 @@ export default function Console() {
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null); // id awaiting the modal's Delete
 
+  // The API key (docs/007): the server authenticates every request, so the
+  // console asks for the key once, keeps it in localStorage, and sends it as
+  // X-Api-Key. The portal's proxy forwards it but stores nothing.
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [keyDraft, setKeyDraft] = useState("");
+  const [askingForKey, setAskingForKey] = useState(false);
+  const [keyRejected, setKeyRejected] = useState(false); // the server said 401 to the stored key
+  const [loaded, setLoaded] = useState(false); // localStorage was read (after mount)
+
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(KEY_STORAGE);
+    } catch {
+      // Storage can be unavailable (private windows): the key then lasts only
+      // until this tab reloads, and the dialog asks again.
+    }
+    setApiKey(stored);
+    setAskingForKey(stored === null); // first visit — ask before anything else
+    setLoaded(true);
+  }, []);
+
+  /** fetch, through the proxy route, with the visitor's key attached. */
+  const call = useCallback(
+    async (path: string, init?: RequestInit): Promise<Response> => {
+      if (apiKey === null) {
+        setAskingForKey(true);
+        throw new Unauthorized("no API key yet — enter it to continue");
+      }
+
+      const headers = new Headers(init?.headers);
+      headers.set("X-Api-Key", apiKey);
+      const res = await fetch(`${API}${path}`, { ...init, headers, cache: "no-store" });
+
+      if (res.status === 401) {
+        // The stored key is wrong, or the server was restarted with another:
+        // ask for it again instead of failing silently.
+        setKeyRejected(true);
+        setAskingForKey(true);
+        throw new Unauthorized("HTTP 401 — the server rejected this key");
+      }
+
+      return res;
+    },
+    [apiKey],
+  );
+
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/docs`, { cache: "no-store" });
+      const res = await call("/docs");
       if (!res.ok) throw new Error(await describe(res));
       setIds((await res.json()) as string[]);
       setOffline(null);
     } catch (error) {
       setIds([]);
-      setOffline(message(error));
+      setOffline(error instanceof Unauthorized ? null : message(error));
     }
-  }, []);
+  }, [call]);
 
+  // Requests wait for a key: not read yet, ask; read, use it.
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (apiKey !== null) void refresh();
+  }, [apiKey, refresh]);
+
+  function askForKey() {
+    setKeyDraft(apiKey ?? "");
+    setKeyRejected(false);
+    setAskingForKey(true);
+  }
+
+  function saveKey() {
+    const key = keyDraft.trim();
+    if (key === "") return;
+    try {
+      window.localStorage.setItem(KEY_STORAGE, key);
+    } catch {
+      // Not storable — see the read above.
+    }
+    setApiKey(key); // the effect above refetches with it
+    setKeyRejected(false);
+    setAskingForKey(false);
+  }
 
   async function run(action: () => Promise<string>) {
     setBusy(true);
@@ -47,9 +126,7 @@ export default function Console() {
 
   async function open(id: string) {
     await run(async () => {
-      const res = await fetch(`${API}/docs/${encodeURIComponent(id)}`, {
-        cache: "no-store",
-      });
+      const res = await call(`/docs/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(await describe(res));
       const text = await res.text();
       setOpenId(id);
@@ -79,7 +156,7 @@ export default function Console() {
 
     if (id !== "") {
       await run(async () => {
-        const res = await fetch(`${API}/docs/${encodeURIComponent(id)}`, {
+        const res = await call(`/docs/${encodeURIComponent(id)}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body,
@@ -93,7 +170,7 @@ export default function Console() {
     }
 
     await run(async () => {
-      const res = await fetch(`${API}/docs`, {
+      const res = await call("/docs", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body,
@@ -109,7 +186,7 @@ export default function Console() {
 
   async function compact() {
     await run(async () => {
-      const res = await fetch(`${API}/compact`, { method: "POST" });
+      const res = await call("/compact", { method: "POST" });
       if (!res.ok) throw new Error(await describe(res));
       return `POST /compact → ${res.status} (dead puts and tombstones reclaimed)`;
     });
@@ -127,7 +204,7 @@ export default function Console() {
     setConfirmingDelete(null);
 
     await run(async () => {
-      const res = await fetch(`${API}/docs/${encodeURIComponent(id)}`, {
+      const res = await call(`/docs/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await describe(res));
@@ -143,17 +220,34 @@ export default function Console() {
         <h1>
           CrowDB <span className="muted">debug console</span>
         </h1>
-        <span className={offline ? "pill bad" : "pill good"}>
+        <nav className="nav">
+          <Link href="/" className="active" aria-current="page">
+            Console
+          </Link>
+          <Link href="/api-docs">API docs</Link>
+        </nav>
+        <button
+          onClick={askForKey}
+          title="Set the key sent as X-Api-Key; it stays in this browser (localStorage)"
+        >
+          API key
+        </button>
+        <span className={offline ? "pill bad" : apiKey !== null ? "pill good" : "pill"}>
           {offline
             ? "API offline"
-            : `connected — ${ids.length} document${ids.length === 1 ? "" : "s"}`}
+            : !loaded
+              ? "loading…"
+              : apiKey === null
+                ? "API key required"
+                : `connected — ${ids.length} document${ids.length === 1 ? "" : "s"}`}
         </span>
       </header>
 
       {offline !== null && (
         <p className="banner bad">
-          Cannot reach the API: {offline} — is the server running?{" "}
-          <code>dotnet run --project src/CrowDB.Server</code>
+          Cannot reach the API: {offline} — is the server running, and does it use
+          the key from the dialog?{" "}
+          <code>CrowDB__ApiKey=... dotnet run --project src/CrowDB.Server</code>
         </p>
       )}
 
@@ -177,7 +271,9 @@ export default function Console() {
 
           {ids.length === 0 && offline === null ? (
             <p className="muted">
-              No documents yet — write one on the right and press Create.
+              {apiKey === null
+                ? "Enter the API key to load documents."
+                : "No documents yet — write one on the right and press Create."}
             </p>
           ) : (
             <ul className="ids">
@@ -273,6 +369,60 @@ export default function Console() {
                 disabled={busy}
               >
                 Delete (DELETE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {askingForKey && (
+        <div
+          className="modal-backdrop"
+          onClick={() => setAskingForKey(false)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setAskingForKey(false);
+          }}
+        >
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="key-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="key-title">API key</h2>
+            <p>
+              This server authenticates every request with the{" "}
+              <code>X-Api-Key</code> header. The key stays in this browser
+              (<code>localStorage</code>); the portal&apos;s proxy passes it to the
+              API, nothing more.
+            </p>
+            {keyRejected && (
+              <p className="status bad">
+                The server rejected this key — check it and try again.
+              </p>
+            )}
+            <label className="field">
+              <span className="label">key</span>
+              <input
+                type="password"
+                value={keyDraft}
+                onChange={(event) => setKeyDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") saveKey();
+                }}
+                placeholder="the deployment's CrowDB__ApiKey"
+                spellCheck={false}
+                autoFocus
+              />
+            </label>
+            <div className="row">
+              <button onClick={() => setAskingForKey(false)}>Cancel</button>
+              <button
+                className="primary"
+                onClick={saveKey}
+                disabled={keyDraft.trim() === ""}
+              >
+                Save key
               </button>
             </div>
           </div>

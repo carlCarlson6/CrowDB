@@ -29,6 +29,8 @@ Everything here lives in `CrowDB.Server` and the repo root; the engine, the endp
 
 **As built: C.** `CrowDB:ApiKey` is read from configuration (environment variable `CrowDB__ApiKey`, user-secrets, or `appsettings`); empty or whitespace counts as unset. Outside Development a missing key throws at startup with a message naming the setting, so a container without a key exits immediately instead of serving. The startup log states the mode: "authentication is enabled" or a warning that the server is serving without credentials.
 
+> **Amended by docs/007:** the key-less Development shape was removed — a missing key now refuses to start in **every** environment, and the portal carries the key in the visitor's browser. Option C above stands as the historical choice this step made.
+
 ## 4. The header and the comparison
 
 - **`Authorization: Bearer <key>` vs `X-Api-Key: <key>`.** Bearer is the standard credential slot and comes with the spec's `WWW-Authenticate` challenge, and proxies tend to redact it in logs. `X-Api-Key` is the explicit API-key convention, with no scheme parsing. **Chosen: `X-Api-Key`** — one mechanism, one meaning; a 401 needs no challenge header. Consequence to respect: keep this header out of access logs and traces (unlike `Authorization`, infrastructure won't redact it for you).
@@ -45,6 +47,8 @@ Everything here lives in `CrowDB.Server` and the repo root; the engine, the endp
 | right key in Production → POST/GET/PUT/DELETE/compact all work | the deployment shape serves normally |
 | unauthenticated PUT → 401, then authenticated GET → 404 and list → empty | the gate runs *before* the endpoint, so nothing reaches the store |
 | Development, no key → requests served | the local workflow stays open |
+
+> **Amended by docs/007:** that last row is gone — Development without a key now refuses to start like every other environment; the case replaced it.
 | Production with key `null`/`""`/`"   "` → server refuses to start, error names `CrowDB:ApiKey` | fail closed, with a fixable error |
 
 The harness (`CrowDbServer`) gained two knobs — `apiKey` and `environment` — and now pins the environment so tests never inherit the machine's.
@@ -75,7 +79,7 @@ curl -H "X-Api-Key: $KEY" http://localhost:5217/docs
 ## 8. Decisions you will meet
 
 - **401 is empty-bodied and applies to `/` too.** There is no anonymous surface; the running-notice endpoint is not a health check. If probes need one later, it gets its own decision.
-- **The portal does not send the key.** Its workflow *is* Development without a key. Configure a key in Development and the portal gets 401s until it learns the header — deliberately out of scope here.
+- **The portal does not send the key.** Its workflow *is* Development without a key. Configure a key in Development and the portal gets 401s until it learns the header — deliberately out of scope here. **(Amended by docs/007:** the portal sends the key — a modal stores it in the visitor's browser and the proxy route forwards it as `X-Api-Key`.)
 - **TLS is not this server's job.** An API key over plain HTTP is only as private as the network; terminate TLS at a reverse proxy before anything real, or every key is one packet capture away.
 - **One key, one scope.** No rotation, no multiple keys, no rate limiting, no audit trail of which key touched what. All later concerns.
 - **The engine still knows nothing about any of this.** Auth is bytes-in-front-of-bytes: it runs before `Store` is ever called, and `CrowDB.Engine` gained no reference.

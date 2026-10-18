@@ -133,17 +133,21 @@ public class OpenApiDocsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task GIVEN_no_key_in_development_WHEN_reading_the_document_THEN_it_does_not_require_security()
+    public async Task GIVEN_the_server_WHEN_reading_the_document_THEN_it_declares_and_requires_the_x_api_key_scheme()
     {
-        // The reference describes the server it runs on: nothing to authorize
-        // locally, so there is no scheme and no requirement to show.
+        // The document mirrors the deployment shape (docs/006 §3) and docs/007
+        // removed the keyless shape entirely: even the factory's default
+        // Development server declares the scheme and the requirement.
         using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
         using var document = JsonDocument.Parse(await client.GetStringAsync(DocumentUrl));
         var root = document.RootElement;
 
-        Assert.False(root.TryGetProperty("security", out _));
-        Assert.False(root.GetProperty("components").TryGetProperty("securitySchemes", out _));
+        var scheme = root.GetProperty("components").GetProperty("securitySchemes").GetProperty("ApiKeyAuth");
+        Assert.Equal("X-Api-Key", scheme.GetProperty("name").GetString());
+
+        var requirement = root.GetProperty("security").EnumerateArray().Single();
+        Assert.True(requirement.TryGetProperty("ApiKeyAuth", out _));
     }
 
     [Fact]

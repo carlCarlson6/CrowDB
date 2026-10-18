@@ -28,7 +28,7 @@ public class MigrationApiTests(ITestOutputHelper output)
             """{"Version":"1","Id":"user:3","Doc":"{\u0022name\u0022:tor""", // torn tail: dropped
         }));
 
-        using var client = server.CreateClient();
+        using var client = server.CreateClient().WithKey();
 
         var get = await client.GetAsync(DocUrl("user:1"));
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
@@ -46,7 +46,7 @@ public class MigrationApiTests(ITestOutputHelper output)
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""");
 
         using (var server = new CrowDbServer(output, data))
-        using (var client = server.CreateClient())
+        using (var client = server.CreateClient().WithKey())
         {
             var get = await client.GetAsync(DocUrl("user:1"));
             Assert.Equal(HttpStatusCode.OK, get.StatusCode);
@@ -62,7 +62,7 @@ public class MigrationApiTests(ITestOutputHelper output)
         // A fresh server over the migrated bytes serves the same answers, and
         // new writes land as frames after the migrated ones.
         using (var server = new CrowDbServer(output, data))
-        using (var client = server.CreateClient())
+        using (var client = server.CreateClient().WithKey())
         {
             Assert.Equal("""{"name":"Ada"}""", await (await client.GetAsync(DocUrl("user:1"))).Content.ReadAsStringAsync());
 

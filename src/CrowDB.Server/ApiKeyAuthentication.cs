@@ -6,12 +6,11 @@ using Microsoft.AspNetCore.Http;
 namespace CrowDB.Server;
 
 /// <summary>
-/// API-key authentication at the HTTP edge (docs/005 §2): when a key is
-/// configured, every request must carry it in <see cref="HeaderName"/>, and the
-/// pipeline answers 401 before routing — no endpoint, let alone a store
-/// operation, ever sees an unauthenticated request. With no key configured the
-/// middleware is a no-op; Program only lets that happen in Development
-/// (docs/005 §3).
+/// API-key authentication at the HTTP edge (docs/005 §2, docs/007): every
+/// request must carry the key in <see cref="HeaderName"/>, and the pipeline
+/// answers 401 before routing — no endpoint, let alone a store operation, ever
+/// sees an unauthenticated request. The key is mandatory in every environment:
+/// Program refuses to start without one, so this middleware has no no-op mode.
 /// </summary>
 public static class ApiKeyAuthentication
 {
@@ -34,11 +33,8 @@ public static class ApiKeyAuthentication
     /// <summary>The prefix of the generated OpenAPI document, public like the UI.</summary>
     private const string OpenApiPathPrefix = "/openapi";
 
-    public static void UseApiKey(this WebApplication app, string? apiKey)
+    public static void UseApiKey(this WebApplication app, string apiKey)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
-            return;
-
         var expected = Encoding.UTF8.GetBytes(apiKey);
 
         app.Use(async (context, next) =>

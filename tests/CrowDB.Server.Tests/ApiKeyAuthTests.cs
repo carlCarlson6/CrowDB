@@ -6,13 +6,12 @@ using static CrowDB.Server.Tests.ApiTestSupport;
 namespace CrowDB.Server.Tests;
 
 /// <summary>
-/// The deployment contract of CrowDB.Server (docs/005): a configured API key
-/// gates every endpoint — the check happens at the HTTP edge, before routing
-/// and before the engine, so an unauthenticated request can never reach the
-/// store. The API reference is the one exception (docs/006): / (which
-/// redirects into the UI), /scalar and /openapi are public. A configured key
-/// is enforced in every environment; Development without a key stays open for
-/// local use, and any other environment without a key refuses to start.
+/// The deployment contract of CrowDB.Server (docs/005, amended by docs/007):
+/// the API key is mandatory — no environment serves without one, and a
+/// configured key gates every endpoint, the check happening at the HTTP edge
+/// before routing and before the engine, so an unauthenticated request can
+/// never reach the store. The API reference is the one exception (docs/006):
+/// / (which redirects into the UI), /scalar and /openapi are public.
 /// </summary>
 public class ApiKeyAuthTests(ITestOutputHelper output)
 {
@@ -27,6 +26,9 @@ public class ApiKeyAuthTests(ITestOutputHelper output)
     [InlineData("POST", "/compact")]
     public async Task GIVEN_a_configured_api_key_WHEN_a_request_arrives_without_the_header_THEN_it_is_rejected_with_401(string method, string path)
     {
+        // The factory's default environment is Development, so this theory
+        // also pins the removal of the development exemption (docs/007): a
+        // configured key gates the local server exactly like a deployment.
         using var server = new CrowDbServer(output, apiKey: Key);
         using var client = server.CreateClient();
         using var request = Request(method, path);
@@ -119,29 +121,19 @@ public class ApiKeyAuthTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/docs")).StatusCode);
     }
 
-    [Fact]
-    public async Task GIVEN_no_key_in_development_WHEN_calling_the_api_THEN_requests_are_served_without_credentials()
-    {
-        // The local workflow — `dotnet run` and the portal — stays open
-        // (docs/005 §3); the server logs a warning instead.
-        using var server = new CrowDbServer(output);
-        using var client = server.CreateClient();
-
-        var put = await client.PutAsync(DocUrl("user:1"), Json("""{"name":"Ada"}"""));
-
-        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(DocUrl("user:1"))).StatusCode);
-    }
-
     [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void GIVEN_no_usable_key_outside_development_WHEN_the_server_starts_THEN_it_refuses_to_start(string? apiKey)
+    [InlineData(null, "Development")]
+    [InlineData("", "Development")]
+    [InlineData("   ", "Development")]
+    [InlineData(null, "Production")]
+    [InlineData("", "Production")]
+    [InlineData("   ", "Production")]
+    public void GIVEN_no_usable_key_WHEN_the_server_starts_THEN_it_refuses_to_start_in_every_environment(string? apiKey, string environment)
     {
-        // Fail closed: a deployment that forgot its key must not quietly serve
-        // everyone — and the error names the setting to fix (docs/005 §3).
-        using var server = new CrowDbServer(output, apiKey: apiKey, environment: "Production");
+        // Fail closed everywhere (docs/007): a server without a key — local
+        // `dotnet run` included — must not quietly serve everyone, and the
+        // error names the setting to fix.
+        using var server = new CrowDbServer(output, apiKey: apiKey, environment: environment);
 
         var exception = Assert.Throws<InvalidOperationException>(() => server.CreateClient());
         var message = $"{exception.Message} {exception.InnerException?.Message}";

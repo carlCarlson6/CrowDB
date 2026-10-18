@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 // The API docs section renders the server's own OpenAPI document (docs/006):
 // the server generates it from its mapped routes, so this page always shows
 // the running server, not a copy that could drift. Fetched through the same
-// same-origin /api rewrite as the console — no API URL in client code.
+// same-origin /api proxy route as the console — no API URL in client code.
 const API = "/api";
 
 /** The parts of the OpenAPI document this page reads. */
@@ -162,8 +162,8 @@ export default function ApiDocs() {
 }
 
 /**
- * The document only carries a security section when the server runs with a key
- * configured (docs/006): the note describes that gate, it is not one.
+ * The document always carries a security section (docs/007: every server has
+ * a key), so this note describes that gate rather than appearing conditionally.
  */
 function SecurityNotice({ document }: { document: OpenApiDocument }) {
   const schemes = Object.entries(document.components?.securitySchemes ?? {});
