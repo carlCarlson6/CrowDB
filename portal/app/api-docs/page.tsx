@@ -109,6 +109,10 @@ export default function ApiDocs() {
         </p>
       )}
 
+      {document === null && offline === null && (
+        <p className="muted">Fetching the OpenAPI document…</p>
+      )}
+
       {document !== null && (
         <section className="panel docs">
           <p className="docs-meta">

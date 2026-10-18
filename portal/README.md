@@ -8,6 +8,16 @@ codes — fetched from `/openapi/v1.json` through the same `/api` proxy route, s
 it always describes the running server. The interactive Scalar UI stays at the
 server's own `/scalar`; no Scalar embed here. Minimal UI.
 
+**Unsaved edits are protected (docs/008).** The console remembers the last
+state the server agreed to: a `modified` badge appears while the editor
+differs from it, opening another id or starting a new document asks first (a
+discard dialog), and closing the tab is the browser's own warning. **Revert**
+restores the last loaded or saved bytes without a request. Ids can be filtered
+as you type; row actions (shown on hover or keyboard focus, always on touch)
+copy an id or delete it straight from the list. **⌘/Ctrl+S** saves from
+anywhere, **⌘/Ctrl+Enter** saves from the editor. Dialogs close on Escape and
+keep Tab inside them.
+
 **The key (docs/007).** The server authenticates every request, so the console
 asks for the key in a dialog on the first visit and keeps it in this browser
 (`localStorage`); every request carries it as `X-Api-Key`. The dialog returns

@@ -14,6 +14,7 @@
          public member. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <UserSecretsId>9460c349-b5f8-4efb-b8a4-b52fb102c041</UserSecretsId>
   </PropertyGroup>
 
   <!-- The API reference (docs/006): Microsoft.AspNetCore.OpenApi builds the

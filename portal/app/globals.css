@@ -97,6 +97,12 @@ button.id {
   color: var(--bad);
 }
 
+.pill.warn {
+  color: #8a5a17;
+  border-color: #e8d9bd;
+  background: #fbf6ec;
+}
+
 .banner {
   margin: 0;
   padding: 8px 10px;
@@ -188,8 +194,8 @@ button.danger:hover:not(:disabled) {
 }
 
 button.id {
-  display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   border: 1px solid transparent;
   background: none;
@@ -201,13 +207,78 @@ button.id {
   white-space: nowrap;
 }
 
+/* The hover and "open" highlights belong to the whole row, not its id text;
+   the generic button hover ring is suppressed here. */
 button.id:hover:not(:disabled) {
+  border-color: transparent;
+}
+
+.id-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+}
+
+.id-row:hover {
   background: #f4f2ee;
 }
 
-button.id.active {
+.id-row.active {
   background: #eef4f0;
   border-color: #cfe0d5;
+}
+
+/* Row actions stay out of the way until the row is hovered or focused
+   (keyboard tab lands on the id and reveals them); touch screens have no
+   hover, so there they are always shown. */
+.row-actions {
+  display: flex;
+  gap: 2px;
+  padding-right: 4px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.id-row:hover .row-actions,
+.id-row:focus-within .row-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .row-actions {
+    opacity: 1;
+  }
+}
+
+button.mini {
+  font-size: 11px;
+  padding: 2px 5px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+button.mini:hover:not(:disabled) {
+  border-color: #c9c5bb;
+  background: #fff;
+  color: var(--ink);
+}
+
+button.mini.danger {
+  color: var(--bad);
+}
+
+button.mini.danger:hover:not(:disabled) {
+  border-color: #d9a89f;
+  background: #fdf4f3;
+}
+
+button.mini.copied {
+  color: var(--good);
+  border-color: #cfe0d5;
+  background: #eef4f0;
 }
 
 .hint {
@@ -263,7 +334,15 @@ textarea {
   line-height: 1.5;
 }
 
+button:focus-visible,
+.nav a:focus-visible {
+  outline: 2px solid #b9d2c2;
+  outline-offset: 1px;
+}
+
 .status {
+  margin: 0;
+  min-height: 18px;
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -302,6 +381,11 @@ textarea {
 .modal h2 {
   margin: 0;
   font-size: 15px;
+}
+
+/* The dialog can take focus itself when nothing inside asked for it. */
+.modal:focus {
+  outline: none;
 }
 
 .modal p {
@@ -437,4 +521,29 @@ textarea {
   min-width: 3ch;
   font-size: 11px;
   color: var(--ink);
+}
+
+/* Narrow windows: stack the panels instead of squeezing the editor next to
+   the list — the console often shares a screen with a terminal. */
+@media (max-width: 760px) {
+  .console {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .columns {
+    grid-template-columns: 1fr;
+  }
+
+  .ids {
+    max-height: 32vh;
+  }
+
+  textarea {
+    min-height: 200px;
+  }
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Modal from "./modal";
 
 // The portal talks to CrowDB.Server through its own origin: the proxy route
 // (app/api/[...path]/route.ts) forwards /api/* to CROWDB_API_URL, or to the
@@ -11,7 +12,24 @@ const API = "/api";
 /** Where the visitor's key lives — this browser only (docs/007). */
 const KEY_STORAGE = "crowdb:api-key";
 
+/** What a brand-new document starts from. */
+const BLANK_BODY = "{}\n";
+
 type Status = { ok: boolean; text: string };
+
+/**
+ * The editor's last agreement with the server: the id and body a GET returned
+ * or a PUT/POST confirmed (docs/008). `null` means the editor holds a new
+ * document that was never written. Comparing the editor against this baseline
+ * answers "are there unsaved changes?" without keeping a history.
+ */
+type Baseline = { id: string; body: string };
+
+/**
+ * An action that would replace the editor's contents, held back by the
+ * discard dialog while the editor has unsaved changes.
+ */
+type PendingEdit = { action: "open"; id: string } | { action: "new" };
 
 /**
  * Thrown when a request can't proceed for want of a working key: none stored,
@@ -21,14 +39,21 @@ type Status = { ok: boolean; text: string };
 class Unauthorized extends Error {}
 
 export default function Console() {
+  // — the document list —
   const [ids, setIds] = useState<string[]>([]);
+  const [idsLoaded, setIdsLoaded] = useState(false); // the first GET /docs has answered
   const [offline, setOffline] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null); // document currently loaded
+  const [filter, setFilter] = useState(""); // narrows the list, client-side only
+  const [copiedId, setCopiedId] = useState<string | null>(null); // whose "copy" just succeeded
+
+  // — the editor —
+  const [baseline, setBaseline] = useState<Baseline | null>(null); // last state the server agreed to
   const [idDraft, setIdDraft] = useState(""); // id that Save will PUT to (empty = POST)
-  const [body, setBody] = useState("{}\n");
+  const [body, setBody] = useState(BLANK_BODY);
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null); // id awaiting the modal's Delete
+  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null); // action waiting behind the discard dialog
 
   // The API key (docs/007): the server authenticates every request, so the
   // console asks for the key once, keeps it in localStorage, and sends it as
@@ -51,6 +76,17 @@ export default function Console() {
     setAskingForKey(stored === null); // first visit — ask before anything else
     setLoaded(true);
   }, []);
+
+  // What the editor currently disagrees with the server about (docs/008).
+  const activeId = baseline?.id ?? null; // the document the list marks
+  const draftId = idDraft.trim();
+  const dirty =
+    baseline === null
+      ? draftId !== "" || body !== BLANK_BODY
+      : draftId !== baseline.id || body !== baseline.body;
+
+  const needle = filter.trim().toLowerCase();
+  const visibleIds = needle === "" ? ids : ids.filter((id) => id.toLowerCase().includes(needle));
 
   /** fetch, through the proxy route, with the visitor's key attached. */
   const call = useCallback(
@@ -82,6 +118,7 @@ export default function Console() {
       const res = await call("/docs");
       if (!res.ok) throw new Error(await describe(res));
       setIds((await res.json()) as string[]);
+      setIdsLoaded(true);
       setOffline(null);
     } catch (error) {
       setIds([]);
@@ -93,6 +130,42 @@ export default function Console() {
   useEffect(() => {
     if (apiKey !== null) void refresh();
   }, [apiKey, refresh]);
+
+  // The edit loss the page cannot ask about itself is a reload or a tab close:
+  // the browser shows its own dialog for that (docs/008).
+  useEffect(() => {
+    if (!dirty) return;
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault();
+    }
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  // The "copied" feedback in the list resets itself.
+  useEffect(() => {
+    if (copiedId === null) return;
+    const timer = window.setTimeout(() => setCopiedId(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [copiedId]);
+
+  // Cmd/Ctrl+S writes the editor from anywhere, the textarea included — the
+  // browser's "save page" dialog is never the save anyone means here. The ref
+  // keeps one listener subscribed while always calling the latest save.
+  const saveRef = useRef<() => Promise<void>>(async () => {});
+  useEffect(() => {
+    saveRef.current = save;
+  });
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveRef.current();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   function askForKey() {
     setKeyDraft(apiKey ?? "");
@@ -124,26 +197,73 @@ export default function Console() {
     }
   }
 
+  /** The editor as brand new: nothing loaded, nothing to compare against. */
+  function resetEditor() {
+    setBaseline(null);
+    setIdDraft("");
+    setBody(BLANK_BODY);
+  }
+
+  function startNew() {
+    resetEditor();
+    setStatus(null);
+  }
+
+  /** "New document" goes through the discard dialog while edits would be lost. */
+  function requestNew() {
+    if (dirty) {
+      setPendingEdit({ action: "new" });
+      return;
+    }
+    startNew();
+  }
+
+  /** GET a document into the editor — call it through requestOpen. */
   async function open(id: string) {
     await run(async () => {
       const res = await call(`/docs/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error(await describe(res));
       const text = await res.text();
-      setOpenId(id);
+      const shown = pretty(text);
+      setBaseline({ id, body: shown });
       setIdDraft(id);
-      setBody(pretty(text));
+      setBody(shown);
       return `GET /docs/${id} → 200 (${byteLength(text)} bytes)`;
     });
   }
 
-  function startNew() {
-    setOpenId(null);
-    setIdDraft("");
-    setBody("{}\n");
-    setStatus(null);
+  function requestOpen(id: string) {
+    if (dirty) {
+      setPendingEdit({ action: "open", id });
+      return;
+    }
+    void open(id);
+  }
+
+  /** The discard dialog's "Discard changes": perform the action it held back. */
+  function discardPendingEdit() {
+    const pending = pendingEdit;
+    setPendingEdit(null);
+    if (pending === null) return;
+    if (pending.action === "new") startNew();
+    else void open(pending.id);
+  }
+
+  /** Put the editor back to its last server-agreed contents. */
+  function revert() {
+    if (baseline === null) {
+      resetEditor();
+      return;
+    }
+    setIdDraft(baseline.id);
+    setBody(baseline.body);
   }
 
   async function save() {
+    // A shortcut can fire while a dialog owns the page or a request is in
+    // flight: silently do nothing in those moments.
+    if (busy || askingForKey || confirmingDelete !== null || pendingEdit !== null) return;
+
     const id = idDraft.trim();
 
     // Fail fast with a clear message; the server would reject it anyway.
@@ -162,7 +282,8 @@ export default function Console() {
           body,
         });
         if (!res.ok) throw new Error(await describe(res));
-        setOpenId(id);
+        setBaseline({ id, body });
+        setIdDraft(id);
         await refresh();
         return `PUT /docs/${id} → ${res.status} (${byteLength(body)} bytes, last write wins)`;
       });
@@ -177,7 +298,7 @@ export default function Console() {
       });
       if (!res.ok) throw new Error(await describe(res));
       const created = (await res.json()) as { id: string };
-      setOpenId(created.id);
+      setBaseline({ id: created.id, body });
       setIdDraft(created.id);
       await refresh();
       return `POST /docs → ${res.status}, server-generated id "${created.id}"`;
@@ -193,9 +314,8 @@ export default function Console() {
   }
 
   function askDelete() {
-    const id = idDraft.trim();
-    if (id === "") return;
-    setConfirmingDelete(id); // the custom modal decides from here
+    if (draftId === "") return;
+    setConfirmingDelete(draftId); // the custom modal decides from here
   }
 
   async function confirmDelete() {
@@ -208,10 +328,22 @@ export default function Console() {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await describe(res));
-      startNew(); // the document is gone — render a fresh one
+      // Only when the id on screen is the one that vanished does the editor
+      // need emptying; deleting another id from the list leaves it alone.
+      if (baseline !== null && baseline.id === id) startNew();
       await refresh();
       return `DELETE /docs/${id} → ${res.status} (tombstone appended)`;
     });
+  }
+
+  /** The list's copy button: the id lands on the clipboard, briefly "copied". */
+  async function copyId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(id);
+    } catch (error) {
+      setStatus({ ok: false, text: `could not copy the id — ${message(error)}` });
+    }
   }
 
   return (
@@ -247,7 +379,10 @@ export default function Console() {
         <p className="banner bad">
           Cannot reach the API: {offline} — is the server running, and does it use
           the key from the dialog?{" "}
-          <code>CrowDB__ApiKey=... dotnet run --project src/CrowDB.Server</code>
+          <code>CrowDB__ApiKey=... dotnet run --project src/CrowDB.Server</code>{" "}
+          <button onClick={() => void refresh()} disabled={busy}>
+            Retry
+          </button>
         </p>
       )}
 
@@ -257,7 +392,7 @@ export default function Console() {
             <button onClick={() => void refresh()} disabled={busy}>
               Refresh
             </button>
-            <button onClick={startNew} disabled={busy}>
+            <button onClick={requestNew} disabled={busy}>
               New document
             </button>
             <button
@@ -269,34 +404,86 @@ export default function Console() {
             </button>
           </div>
 
-          {ids.length === 0 && offline === null ? (
+          {ids.length > 0 && (
+            <input
+              type="search"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setFilter("");
+              }}
+              placeholder="filter ids…"
+              aria-label="Filter ids"
+              spellCheck={false}
+            />
+          )}
+
+          {ids.length === 0 ? (
             <p className="muted">
               {apiKey === null
                 ? "Enter the API key to load documents."
-                : "No documents yet — write one on the right and press Create."}
+                : offline !== null
+                  ? "The list loads again once the API answers."
+                  : !idsLoaded
+                    ? "Loading documents…"
+                    : "No documents yet — write one on the right and press Create."}
             </p>
+          ) : visibleIds.length === 0 ? (
+            <p className="muted">No id matches “{filter.trim()}”.</p>
           ) : (
             <ul className="ids">
-              {ids.map((id) => (
-                <li key={id}>
+              {visibleIds.map((id) => (
+                <li key={id} className={id === activeId ? "id-row active" : "id-row"}>
                   <button
-                    className={id === openId ? "id active" : "id"}
-                    onClick={() => void open(id)}
+                    className="id"
+                    onClick={() => requestOpen(id)}
                     disabled={busy}
+                    title={id}
+                    aria-current={id === activeId ? "true" : undefined}
                   >
                     {id}
                   </button>
+                  <span className="row-actions">
+                    <button
+                      className={copiedId === id ? "mini copied" : "mini"}
+                      onClick={() => void copyId(id)}
+                      disabled={busy}
+                      title={`Copy the id "${id}" to the clipboard`}
+                      aria-label={`Copy id ${id}`}
+                    >
+                      {copiedId === id ? "copied" : "copy"}
+                    </button>
+                    <button
+                      className="mini danger"
+                      onClick={() => setConfirmingDelete(id)}
+                      disabled={busy}
+                      title={`DELETE /docs/${id} — appends a tombstone`}
+                      aria-label={`Delete document ${id}`}
+                    >
+                      del
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>
           )}
 
           <p className="hint">
-            GET /docs · {ids.length} id(s) · unordered (hash index)
+            GET /docs · {ids.length} id(s)
+            {needle !== "" ? ` · ${visibleIds.length} shown` : ""} · unordered (hash
+            index)
           </p>
         </aside>
 
-        <section className="panel editor">
+        <section
+          className="panel editor"
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              void save();
+            }
+          }}
+        >
           <label className="field">
             <span className="label">id</span>
             <input
@@ -317,116 +504,140 @@ export default function Console() {
           </label>
 
           <div className="row">
-            <button className="primary" onClick={() => void save()} disabled={busy}>
-              {idDraft.trim() === "" ? "Create (POST)" : "Save (PUT)"}
+            <button
+              className="primary"
+              onClick={() => void save()}
+              disabled={busy}
+              title={
+                draftId === ""
+                  ? "POST /docs — the server generates the id (⌘/Ctrl+S)"
+                  : `PUT /docs/${draftId} (⌘/Ctrl+S)`
+              }
+            >
+              {draftId === "" ? "Create (POST)" : "Save (PUT)"}
             </button>
             <button
               className="danger"
               onClick={askDelete}
-              disabled={busy || idDraft.trim() === ""}
+              disabled={busy || draftId === ""}
               title="DELETE /docs/{id} — appends a tombstone"
             >
               Delete
             </button>
+            <button
+              onClick={revert}
+              disabled={busy || !dirty}
+              title="Undo unsaved edits — back to what the last load or save stored"
+            >
+              Revert
+            </button>
             <span className="muted">{byteLength(body)} bytes</span>
-            {status !== null && (
-              <span className={status.ok ? "status good" : "status bad"}>
-                {status.text}
+            {dirty && (
+              <span
+                className="pill warn"
+                title="Not written to the log yet — Save (⌘/Ctrl+S) writes it, Revert discards it"
+              >
+                modified
               </span>
             )}
           </div>
+
+          <p
+            className={status === null ? "status" : status.ok ? "status good" : "status bad"}
+            role="status"
+          >
+            {status?.text ?? ""}
+          </p>
         </section>
       </div>
 
       {confirmingDelete !== null && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setConfirmingDelete(null)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setConfirmingDelete(null);
-          }}
-        >
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="delete-title">Delete this document?</h2>
-            <p>
-              The engine appends a <strong>tombstone</strong>: the old bytes stay in
-              the log, but the id disappears from reads and listings.
-            </p>
-            <code>{confirmingDelete}</code>
-            <div className="row">
-              <button autoFocus onClick={() => setConfirmingDelete(null)}>
-                Cancel
-              </button>
-              <button
-                className="danger"
-                onClick={() => void confirmDelete()}
-                disabled={busy}
-              >
-                Delete (DELETE)
-              </button>
-            </div>
+        <Modal labelledBy="delete-title" onClose={() => setConfirmingDelete(null)}>
+          <h2 id="delete-title">Delete this document?</h2>
+          <p>
+            The engine appends a <strong>tombstone</strong>: the old bytes stay in
+            the log, but the id disappears from reads and listings.
+          </p>
+          <code>{confirmingDelete}</code>
+          <div className="row">
+            <button autoFocus onClick={() => setConfirmingDelete(null)}>
+              Cancel
+            </button>
+            <button
+              className="danger"
+              onClick={() => void confirmDelete()}
+              disabled={busy}
+            >
+              Delete (DELETE)
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
-      {askingForKey && (
-        <div
-          className="modal-backdrop"
-          onClick={() => setAskingForKey(false)}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setAskingForKey(false);
-          }}
-        >
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="key-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h2 id="key-title">API key</h2>
-            <p>
-              This server authenticates every request with the{" "}
-              <code>X-Api-Key</code> header. The key stays in this browser
-              (<code>localStorage</code>); the portal&apos;s proxy passes it to the
-              API, nothing more.
-            </p>
-            {keyRejected && (
-              <p className="status bad">
-                The server rejected this key — check it and try again.
-              </p>
+
+      {pendingEdit !== null && (
+        <Modal labelledBy="discard-title" onClose={() => setPendingEdit(null)}>
+          <h2 id="discard-title">Discard unsaved changes?</h2>
+          <p>
+            This editor holds changes that were never written to the log.
+            {pendingEdit.action === "open" ? (
+              <>
+                {" "}
+                Opening <code>{pendingEdit.id}</code> would replace them.
+              </>
+            ) : (
+              " Starting a new document would clear them."
             )}
-            <label className="field">
-              <span className="label">key</span>
-              <input
-                type="password"
-                value={keyDraft}
-                onChange={(event) => setKeyDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") saveKey();
-                }}
-                placeholder="the deployment's CrowDB__ApiKey"
-                spellCheck={false}
-                autoFocus
-              />
-            </label>
-            <div className="row">
-              <button onClick={() => setAskingForKey(false)}>Cancel</button>
-              <button
-                className="primary"
-                onClick={saveKey}
-                disabled={keyDraft.trim() === ""}
-              >
-                Save key
-              </button>
-            </div>
+          </p>
+          <div className="row">
+            <button autoFocus onClick={() => setPendingEdit(null)}>
+              Keep editing
+            </button>
+            <button className="danger" onClick={discardPendingEdit}>
+              Discard changes
+            </button>
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {askingForKey && (
+        <Modal labelledBy="key-title" onClose={() => setAskingForKey(false)}>
+          <h2 id="key-title">API key</h2>
+          <p>
+            This server authenticates every request with the{" "}
+            <code>X-Api-Key</code> header. The key stays in this browser
+            (<code>localStorage</code>); the portal&apos;s proxy passes it to the
+            API, nothing more.
+          </p>
+          {keyRejected && (
+            <p className="status bad">
+              The server rejected this key — check it and try again.
+            </p>
+          )}
+          <label className="field">
+            <span className="label">key</span>
+            <input
+              type="password"
+              value={keyDraft}
+              onChange={(event) => setKeyDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") saveKey();
+              }}
+              placeholder="the deployment's CrowDB__ApiKey"
+              spellCheck={false}
+              autoFocus
+            />
+          </label>
+          <div className="row">
+            <button onClick={() => setAskingForKey(false)}>Cancel</button>
+            <button
+              className="primary"
+              onClick={saveKey}
+              disabled={keyDraft.trim() === ""}
+            >
+              Save key
+            </button>
+          </div>
+        </Modal>
       )}
     </main>
   );
