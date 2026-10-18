@@ -27,6 +27,16 @@ internal sealed class TempDirectory : IDisposable
     /// </summary>
     public void AppendRaw(byte[] text) => File.AppendAllBytes(LogFile, text);
 
+    /// <summary>
+    /// Removes bytes from the end of the log — the other half of a crash
+    /// mid-append: a torn write is a frame that never finished.
+    /// </summary>
+    public void TruncateTail(int byteCount)
+    {
+        using var log = File.Open(LogFile, FileMode.Open, FileAccess.Write);
+        log.SetLength(log.Length - byteCount);
+    }
+
     public void Dispose()
     {
         // Best effort: a leaked file handle must not turn one failure into many.

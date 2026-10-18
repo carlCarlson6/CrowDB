@@ -190,6 +190,8 @@ Fixed 13-byte header, then payload. All numbers little-endian.
 
 Notable consequences: no escaping rules (a document containing raw newlines is just bytes); the next record's start is computable from the header, so locating frame N+1 never requires scanning for delimiters; a length sanity cap (e.g., refuse docLen > 16 MiB) protects against trusting a corrupted header.
 
+> *As contracted for step 4 ([004 — Step 4: binary format v2](004-step-4-binary-format-v2.md)): the v2 frame is 14 bytes, not 13 — an explicit `kind` byte (0 = PUT, 1 = DELETE) sits before the lengths and is covered by the CRC, and tombstones are a kind rather than a document sentinel (the step-2 lesson, anticipated in §3.6).*
+
 ### 4.3 Write path
 
 Encode lengths → write header + payload into one buffer → compute CRC32 over bytes 7..end → patch the checksum into the header → single `Write` → fsync → repoint index. The §3.3 crash table applies verbatim. The CRC does not *prevent* torn writes; it makes them *provable* on read.

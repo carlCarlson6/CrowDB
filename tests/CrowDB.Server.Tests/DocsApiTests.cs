@@ -146,7 +146,8 @@ public class DocsApiTests(ITestOutputHelper output)
         using var server = new CrowDbServer(output);
 
         // The on-disk format is the contract (docs/000 §3): a previous process
-        // can leave a valid log behind, and a restart must serve it.
+        // can leave a valid log behind, and a restart must serve it. A v1 log
+        // is migrated to v2 on open (step 4, docs/004) — the answers must not change.
         await File.WriteAllTextAsync(server.LogFile,
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}"""+"\n");
 
@@ -219,7 +220,8 @@ public class DocsApiTests(ITestOutputHelper output)
         using var server = new CrowDbServer(output);
 
         // The on-disk format is the contract (docs/002 §3): a previous process
-        // can leave a tombstoned log behind, and a restart must serve it that way.
+        // can leave a tombstoned — v1 — log behind, and a restart must serve it
+        // that way; the migration (step 4, docs/004) keeps the verdict.
         await File.WriteAllTextAsync(server.LogFile, string.Join('\n', new[]
         {
             """{"Version":"1","Id":"user:1","Doc":"{\u0022name\u0022:\u0022Ada\u0022}"}""",

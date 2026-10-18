@@ -10,7 +10,8 @@ namespace CrowDB.Engine.Tests;
 /// One session, no reopening: point lookups, last-write-wins, listing.
 ///
 /// Every document here is valid JSON, because the HTTP layer guarantees that
-/// before calling the engine — the engine's own record envelope is JSON too.
+/// before calling the engine — the engine itself treats documents as opaque
+/// bytes (v2 frames carry them raw; the engine never parses them).
 /// </summary>
 public class StoreTests(ITestOutputHelper output)
 {

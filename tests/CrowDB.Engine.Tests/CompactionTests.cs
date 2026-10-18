@@ -9,13 +9,15 @@ namespace CrowDB.Engine.Tests;
 /// <summary>
 /// Step 3: compaction — rewriting the log as only its live records, then
 /// swapping the new file in with one atomic rename. The index is the compaction
-/// plan: everything it points at is copied verbatim; dead puts, tombstones, and
-/// torn tails are reclaimed. Nothing here may change what the store answers —
-/// only how many bytes it takes to answer.
+/// plan: everything it points at is copied verbatim; dead puts and tombstones
+/// are reclaimed. (Torn tails are reclaimed even earlier, by recovery at open —
+/// step 4, docs/004 §3.) Nothing here may change what the store answers — only
+/// how many bytes it takes to answer.
 ///
 /// File *contents* are inspected only while the store is closed: it holds the
 /// log open with <c>FileShare.None</c>, so a second reader is refused on purpose
-/// (<c>FileInfo.Length</c> is a stat and is fine at any time).
+/// (<c>FileInfo.Length</c> is a stat and is fine at any time). Since step 4 the
+/// log is binary frames, so the tests parse frames rather than read text.
 /// </summary>
 public class CompactionTests(ITestOutputHelper output)
 {
@@ -41,10 +43,13 @@ public class CompactionTests(ITestOutputHelper output)
             Assert.Equal(2, store.ListIds().Count);
         }
 
-        var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain("""{\u0022name\u0022:\u0022Ada\u0022}""", log, StringComparison.Ordinal); // the dead v1 record
-        Assert.True(log.IndexOf("Grace", StringComparison.Ordinal) < log.IndexOf("Lovelace", StringComparison.Ordinal),
-            "live records are copied in log order, not dictionary order");
+        var log = File.ReadAllBytes(temp.LogFile);
+        var frames = FrameBytes.ParseAll(log);
+        Assert.Equal(2, frames.Count);
+        Assert.Equal(-1, log.AsSpan().IndexOf("""{"name":"Ada"}"""u8)); // the dead frame is physically gone
+        Assert.Equal("user:2", frames[0].Id);                             // copied in log order, not dictionary order
+        Assert.Equal(ada2, frames[1].Doc);                                // …and verbatim
+        Assert.Equal("user:1", frames[1].Id);
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -75,10 +80,13 @@ public class CompactionTests(ITestOutputHelper output)
         }
 
         // Closed store: the log can be inspected — the deleted document's bytes
-        // and the tombstone are physically gone, not merely ignored.
-        var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain("Ada", log, StringComparison.Ordinal);
-        Assert.DoesNotContain(Constants.DeletedDoc, log, StringComparison.Ordinal);
+        // and its tombstone are physically gone, not merely ignored.
+        var log = File.ReadAllBytes(temp.LogFile);
+        var frames = FrameBytes.ParseAll(log);
+        Assert.Single(frames);
+        Assert.Equal("user:2", frames[0].Id);
+        Assert.Equal(-1, log.AsSpan().IndexOf("Ada"u8));
+        Assert.DoesNotContain(FrameBytes.KindDelete, frames.Select(f => f.Kind));
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -105,10 +113,11 @@ public class CompactionTests(ITestOutputHelper output)
             Assert.Equal(version2, Read(store, "user:1"));
         }
 
-        var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain(Constants.DeletedDoc, log, StringComparison.Ordinal);
-        Assert.DoesNotContain("""{\u0022version\u0022:1}""", log, StringComparison.Ordinal);
-        Assert.Contains("""{\u0022version\u0022:2}""", log, StringComparison.Ordinal);
+        var log = File.ReadAllBytes(temp.LogFile);
+        var frames = FrameBytes.ParseAll(log);
+        Assert.Single(frames);
+        Assert.Equal("user:1", frames[0].Id);
+        Assert.Equal(version2, frames[0].Doc);
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -222,8 +231,8 @@ public class CompactionTests(ITestOutputHelper output)
             Assert.False(File.Exists(temp.LogFile + ".compact"), "the rename consumes the temp file");
         }
 
-        var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain("garbage", log, StringComparison.Ordinal);
+        var log = File.ReadAllBytes(temp.LogFile);
+        Assert.Equal(-1, log.AsSpan().IndexOf("garbage"u8));
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -232,8 +241,12 @@ public class CompactionTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void GIVEN_a_torn_tail_WHEN_compacting_THEN_the_tail_is_reclaimed_and_the_valid_records_survive()
+    public void GIVEN_a_torn_tail_WHEN_opening_THEN_recovery_truncates_it_and_compaction_sees_only_frames()
     {
+        // Step 4 moved tail reclamation from compaction to recovery: opening a
+        // log whose last frame is torn keeps the valid prefix and truncates the
+        // rest (docs/004 §3). By the time Compact() runs there is no garbage
+        // left — only the dead records it was already reclaiming.
         using var temp = new TempDirectory();
         var ada = Bytes("""{"name":"Ada"}""");
 
@@ -242,21 +255,23 @@ public class CompactionTests(ITestOutputHelper output)
             store.Put("user:1", ada);
         }
 
-        // A crash mid-append left a partial record: valid prefix, then one torn line.
-        temp.AppendRaw(Bytes("\n" + """{"Version":"1","Id":"user:2","Doc":"{\u0022name\u0022:tor"""));
+        // A crash mid-append: valid prefix, then a frame that never finished.
+        temp.AppendRaw(FrameBytes.Encode("user:2", Bytes("""{"name":"torn"}""")).AsSpan(0, 11).ToArray());
         var sizeBefore = new FileInfo(temp.LogFile).Length;
 
         using (var store = OpenStore(temp.LogFile, output))
         {
+            Assert.True(new FileInfo(temp.LogFile).Length < sizeBefore,
+                "recovery should have reclaimed the torn tail at open");
+
             store.Compact();
 
-            Assert.True(new FileInfo(temp.LogFile).Length < sizeBefore,
-                "the torn tail should be reclaimed");
             Assert.Equal(ada, Read(store, "user:1"));
         }
 
-        var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain("user:2", log, StringComparison.Ordinal);
+        var log = File.ReadAllBytes(temp.LogFile);
+        Assert.Equal(-1, log.AsSpan().IndexOf("torn"u8));
+        Assert.Single(FrameBytes.ParseAll(log));
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {

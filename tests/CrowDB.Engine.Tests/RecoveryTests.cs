@@ -78,8 +78,9 @@ public class RecoveryTests(ITestOutputHelper output)
             store.Put("user:2", Bytes("""{"name":"Grace"}"""));
         }
 
-        // A crash mid-append leaves a partial record — and only ever at the tail.
-        temp.AppendRaw(Bytes("\n"+"""{"v":1,"id":"user:3","doc":{"name":"torn"""));
+        // A crash mid-append leaves a prefix of a frame — on disk that is at
+        // most one torn frame at the tail (docs/004 §3).
+        temp.AppendRaw(FrameBytes.Encode("user:3", Bytes("""{"name":"torn"}""")).AsSpan(0, 9).ToArray());
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -99,7 +100,7 @@ public class RecoveryTests(ITestOutputHelper output)
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
-        temp.AppendRaw(Bytes("\n"+"""{"v":1,"id":"user:2","doc":{"name":"torn\n"""));
+        temp.AppendRaw(FrameBytes.Encode("user:2", Bytes("""{"name":"torn"}""")).AsSpan(0, 9).ToArray());
 
         using (var store = OpenStore(temp.LogFile, output))
         {
@@ -107,9 +108,9 @@ public class RecoveryTests(ITestOutputHelper output)
         }
 
         // The torn tail must not poison later writes: the log's invariant is
-        // "valid prefix, then at most one partial record", so the store must
-        // either truncate the tail at open or overwrite it — never append
-        // behind the garbage, or this write would be skipped on the next replay.
+        // "valid prefix, then at most one partial frame", and recovery enforces
+        // it by truncating the tail at open (docs/004 §3) — appending behind
+        // the garbage would make this write invisible on the next replay.
         using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.Equal(Bytes("""{"name":"Ada"}"""), Read(reopened, "user:1"));
@@ -167,9 +168,10 @@ public class RecoveryTests(ITestOutputHelper output)
             store.Put("user:1", Bytes("""{"name":"Ada"}"""));
         }
 
-        // A crash mid-delete: the tombstone never completed. The valid-prefix
-        // rule is unchanged — an unparseable tombstone must not delete anything.
-        temp.AppendRaw(Bytes("\n" + """{"Version":"1","Id":"user:1","Doc":nul"""));
+        // A crash mid-delete: the tombstone frame never completed. The
+        // valid-prefix rule is unchanged — an incomplete tombstone must not
+        // delete anything.
+        temp.AppendRaw(FrameBytes.EncodeTombstone("user:1").AsSpan(0, 10).ToArray());
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -190,8 +192,8 @@ public class RecoveryTests(ITestOutputHelper output)
             store.Delete(id);
         }
 
-        // The tombstone's id is escaped into its envelope like any other record:
-        // the newline must never split it into two unparseable lines.
+        // In v2 the id is length-prefixed raw bytes: a newline inside it can
+        // never split a record — no escaping involved (docs/004 §2).
         using (var reopened = OpenStore(temp.LogFile, output))
         {
             Assert.False(reopened.TryGet(id, out _));

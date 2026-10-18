@@ -62,4 +62,4 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 
 **Step 3 is complete.** `Store.Compact()` rewrites the log as only its live records and swaps it in with one atomic rename; one store-wide lock covers every operation, so writers, readers, and compaction can run at the same time without losing state. `POST /compact` exposes it (the portal has a Compact log button), and both suites are green (48 engine + 18 API tests). Design record: [003 — Step 3: compaction](docs/003-step-3-compaction-options.md).
 
-**Next after step 3:** step 4 — binary format v2 + CRC32 (framing, integrity, the v1→v2 migration).
+**Step 4's contract is written (red).** The log becomes v2: binary frames with declared lengths and a CRC32 (magic `CD`, version, kind, 16 MiB document cap), recovery keeps the valid prefix and truncates an invalid tail, and a v1 log is migrated to v2 in place — automatically, with the same atomic-rename dance as compaction. Design record: [004 — Step 4: binary format v2](docs/004-step-4-binary-format-v2.md). Both suites are extended and **fail until the engine implements it** — that is the contract-first workflow, not a broken build.

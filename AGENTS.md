@@ -42,7 +42,7 @@ CrowDB/
 - **Concurrency (as built, step 3):** one private readonly `System.Threading.Lock`, taken by every operation — reads included — because compaction swaps both the file handle and the index (`docs/003` §4.5); lock-free reads are step 6. The log is held with `FileShare.None`: reopening a log requires disposing its store first.
 - **Data:** single `crowdb.log` under `data/` (gitignored).
 
-**Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract not written yet.
+**Open:** step 4 — binary format v2 + CRC32: framing, integrity, and the v1→v2 migration (Option C in `docs/000`). Contract written (red) — [004 — Step 4: binary format v2](docs/004-step-4-binary-format-v2.md) contains the design options with recommendations and the test map; both suites are extended and fail until the engine implements it.
 
 ## Working protocol
 
@@ -72,4 +72,5 @@ CrowDB/
 - `docs/001-step-1-plan.md` — step-1 build order for the engine (log, index, replay, torn tail) and its test list.
 - `docs/002-step-2-tombstones.md` — step-2 design record: why deletes are writes, the tombstone shape options, and the written-first contract.
 - `docs/003-step-3-compaction-options.md` — step-3 design record: the compaction algorithm, atomic rename, crash windows, the one-lock decision, and the written-first contract.
+- `docs/004-step-4-binary-format-v2.md` — step-4 design record: the v2 frame byte by byte, the CRC32 and corruption policy, the sniff/migration rules, and the written-first contract.
 - `README.md` — project intentions and status.
