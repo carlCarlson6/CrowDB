@@ -9,9 +9,10 @@ namespace CrowDB.Server.Tests;
 /// The deployment contract of CrowDB.Server (docs/005): a configured API key
 /// gates every endpoint — the check happens at the HTTP edge, before routing
 /// and before the engine, so an unauthenticated request can never reach the
-/// store. A configured key is enforced in every environment; Development
-/// without a key stays open for local use, and any other environment without
-/// a key refuses to start.
+/// store. The API reference is the one exception (docs/006): /scalar and
+/// /openapi are public. A configured key is enforced in every environment;
+/// Development without a key stays open for local use, and any other
+/// environment without a key refuses to start.
 /// </summary>
 public class ApiKeyAuthTests(ITestOutputHelper output)
 {
@@ -95,6 +96,24 @@ public class ApiKeyAuthTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await authenticated.GetAsync(DocUrl("user:1"))).StatusCode);
         Assert.Empty(await ListIds(authenticated));
+    }
+
+    [Fact]
+    public async Task GIVEN_a_configured_api_key_WHEN_fetching_the_api_reference_THEN_it_is_public_while_the_api_stays_gated()
+    {
+        // docs/006 amends docs/005: the reference describes the API, the key
+        // protects the data. A browser must load /scalar and the document it
+        // fetches without the header — everything under /docs still needs it.
+        using var server = new CrowDbServer(output, apiKey: Key, environment: "Production");
+        using var client = server.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/scalar")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/openapi/v1.json")).StatusCode);
+
+        // Only the reference prefixes are public — matched per path segment,
+        // and not as loose string prefixes.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/scalar-extra")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/docs")).StatusCode);
     }
 
     [Fact]

@@ -39,6 +39,8 @@ cd portal && npm install && npm run dev   # portal on http://localhost:3000
 
 The server logs what the store does to the console (`info: CrowDB.Engine.Store`). Failing tests show the same engine logs in their output.
 
+The server documents itself: the API reference is at http://localhost:5217/scalar (the Scalar UI — clickable requests included), the raw OpenAPI document at http://localhost:5217/openapi/v1.json. It is generated from the routes and their XML comments, and it is **public**: with an API key configured it describes the key (paste it into the UI's authentication panel) while every data route stays gated.
+
 Data survives restarts: on startup the engine replays `data/crowdb.log` and rebuilds the id index in memory.
 
 ## Deploying it
@@ -51,7 +53,7 @@ export KEY=$(openssl rand -hex 32)
 docker run --rm -p 5217:8080 -e CrowDB__ApiKey="$KEY" -v crowdb-data:/data crowdb-server:local
 ```
 
-Outside Development the server **refuses to start without `CrowDB:ApiKey`** — a deployment cannot silently run open. Every request then carries the key in the `X-Api-Key` header (`curl -H "X-Api-Key: $KEY" http://localhost:5217/docs`); missing or wrong keys get an empty `401`. Data lives at `/data` inside the container (the `crowdb-data` volume above), so it survives replacing the container. Keys over plain HTTP are only as private as the network — put TLS in front before using this anywhere real. Local development is unchanged: `dotnet run` in Development with no key configured serves openly, which is what the portal expects.
+Outside Development the server **refuses to start without `CrowDB:ApiKey`** — a deployment cannot silently run open. Every request then carries the key in the `X-Api-Key` header (`curl -H "X-Api-Key: $KEY" http://localhost:5217/docs`); missing or wrong keys get an empty `401`. Exception: the API reference (`/scalar`, `/openapi/v1.json`) is served without the key — it describes the API; the key still gates every `/docs` route. Data lives at `/data` inside the container (the `crowdb-data` volume above), so it survives replacing the container. Keys over plain HTTP are only as private as the network — put TLS in front before using this anywhere real. Local development is unchanged: `dotnet run` in Development with no key configured serves openly, which is what the portal expects.
 
 On Railway, `railway.json` already points the service at `docker/Dockerfile`; set `CrowDB__ApiKey`, mount a volume at `/data`, and set `RAILWAY_RUN_UID=0` — Railway mounts volumes as root while the image runs as `app`. The server binds all interfaces on the injected `PORT` (8080), so the domain's target port can stay unset.
 
@@ -81,3 +83,5 @@ Design record: [005 — API keys & the container image](docs/005-api-key-and-con
 **Step 4's contract is written (red).** The log becomes v2: binary frames with declared lengths and a CRC32 (magic `CD`, version, kind, 16 MiB document cap), recovery keeps the valid prefix and truncates an invalid tail, and a v1 log is migrated to v2 in place — automatically, with the same atomic-rename dance as compaction. Design record: [004 — Step 4: binary format v2](docs/004-step-4-binary-format-v2.md). Both suites are extended and **fail until the engine implements it** — that is the contract-first workflow, not a broken build.
 
 **Deployment ready (2026-10-18).** An API key (`X-Api-Key`, config `CrowDB:ApiKey`) gates every endpoint whenever it is configured, compared in fixed time; a deployment that forgot the key refuses to start, while Development stays open for `dotnet run` and the portal. `docker/build.sh` builds a non-root server image with the data on a volume and the key supplied at run time (17 new API tests). Design record: [005 — API keys & the container image](docs/005-api-key-and-container.md).
+
+**API reference ready (2026-10-18).** The server generates its OpenAPI document from the mapped routes (`/openapi/v1.json`, built from handler XML comments and route metadata) and renders it through Scalar at `/scalar` — browsable and clickable, no CDN. The reference is public even when a key is configured (docs/005 amended), and the document mirrors the deployment: the `X-Api-Key` scheme is declared only when a key is set, so the UI's auth panel carries the key into "try it" requests. Declaring the request bodies switched on .NET 10's content-type validation: a non-JSON `Content-Type` on `POST`/`PUT /docs` now answers `415` (10 new API tests). Design record: [006 — API reference](docs/006-api-reference.md).

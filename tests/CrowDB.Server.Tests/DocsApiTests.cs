@@ -9,8 +9,10 @@ namespace CrowDB.Server.Tests;
 /// <summary>
 /// The HTTP contract of CrowDB.Server: the locked endpoints (docs/000 §7, plus
 /// the DELETE added in docs/002), their status codes, and the fact that
-/// documents travel as raw bytes. The server is the real thing running
-/// in-process; only the data directory is temporary.
+/// documents travel as raw bytes. Since docs/006 the write endpoints declare
+/// their request body, so a non-JSON Content-Type is answered 415 before the
+/// handler — the JSON-content-type 400s are unchanged. The server is the real
+/// thing running in-process; only the data directory is temporary.
 /// </summary>
 public class DocsApiTests(ITestOutputHelper output)
 {
@@ -115,14 +117,32 @@ public class DocsApiTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task GIVEN_an_empty_body_WHEN_posting_THEN_the_response_is_400()
+    public async Task GIVEN_an_empty_json_body_WHEN_posting_THEN_the_response_is_400()
     {
         using var server = new CrowDbServer(output);
         using var client = server.CreateClient();
 
-        var response = await client.PostAsync("/docs", new StringContent(""));
+        // The body is empty but declares JSON, so the content-type gate
+        // (docs/006 §5) lets it through to the handler's JSON check.
+        var response = await client.PostAsync("/docs", Json(""));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GIVEN_a_non_json_content_type_WHEN_writing_THEN_the_response_is_415_and_nothing_is_stored()
+    {
+        // Declaring the request body (Accepts) switches on .NET 10's
+        // content-type validation: text/plain is refused before the handler
+        // ever reads the bytes (docs/006 §5).
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+        var body = new StringContent("""{"name":"Ada"}""", Encoding.UTF8, "text/plain");
+
+        var response = await client.PutAsync(DocUrl("user:1"), body);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        Assert.Empty(await ListIds(client));
     }
 
     [Fact]

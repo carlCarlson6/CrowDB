@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using CrowDB.Engine;
 using CrowDB.Server;
 using CrowDB.Server.Endpoints;
@@ -7,6 +9,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +40,43 @@ Directory.CreateDirectory(dataDirectory);
 var logFile = Path.Combine(dataDirectory, Constants.LogFilename);
 builder.Services
     .AddSingleton<Store>(sp => new Store(logFile, sp.GetRequiredService<ILogger<Store>>()));
+
+// The API reference (docs/006): OpenApiDocumentService builds the OpenAPI
+// document from the mapped endpoints at request time. With
+// GenerateDocumentationFile set, the XML comments on the handlers become its
+// summaries, parameter notes, and response descriptions — the routes document
+// themselves.
+builder.Services.AddOpenApi(options =>
+{
+    // The document mirrors the deployment shape (docs/006 §3): when a key is
+    // configured, every operation is documented as requiring the X-Api-Key
+    // scheme, so Scalar's authentication panel carries the key into the "try
+    // it" requests. Unset (Development), the same document shows no security —
+    // anything else would describe a server that isn't there.
+    if (string.IsNullOrWhiteSpace(apiKey))
+        return;
+
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes[ApiKeyAuthentication.SchemeName] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Name = ApiKeyAuthentication.HeaderName,
+            Description = "The deployment key — configured server-side as CrowDB:ApiKey.",
+        };
+
+        document.Security ??= [];
+        document.Security.Add(new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference(ApiKeyAuthentication.SchemeName, document)] = [],
+        });
+
+        return Task.CompletedTask;
+    });
+});
 
 
 // Logging is already wired by WebApplication.CreateBuilder: it adds the console

@@ -8,6 +8,23 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The XML comments on the endpoint handlers become the summaries and
+         descriptions in the generated OpenAPI document (docs/006). CS1591 is
+         silenced because the doc file exists for that generator, not for every
+         public member. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
+
+  <!-- The API reference (docs/006): Microsoft.AspNetCore.OpenApi builds the
+       document from the mapped routes and the handler XML comments, and
+       Scalar.AspNetCore renders it. Scalar ships its page and JavaScript
+       embedded in the package — no CDN — so the reference works offline.
+       10.0.13 because 10.0.10 pinned the vulnerable Microsoft.OpenApi 2.0.0
+       (NU1903); from 10.0.12 the dependency is the patched [2.12.0, 3.0.0). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.13" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.18.0" />
+  </ItemGroup>
 
 </Project>

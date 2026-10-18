@@ -18,6 +18,20 @@ public static class ApiKeyAuthentication
     /// <summary>The header a deployment puts its key in.</summary>
     public const string HeaderName = "X-Api-Key";
 
+    /// <summary>The name the key appears under in the API reference (docs/006 §3).</summary>
+    public const string SchemeName = "ApiKeyAuth";
+
+    /// <summary>
+    /// The API reference (docs/006 §3): public even when a key is configured.
+    /// A browser loads /scalar and its scripts, and the page fetches the
+    /// OpenAPI document — none of which can carry the header. The paths are
+    /// matched per segment, so "/scalar-extra" is not the reference.
+    /// </summary>
+    private const string ScalarPathPrefix = "/scalar";
+
+    /// <summary>The prefix of the generated OpenAPI document, public like the UI.</summary>
+    private const string OpenApiPathPrefix = "/openapi";
+
     public static void UseApiKey(this WebApplication app, string? apiKey)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -27,6 +41,13 @@ public static class ApiKeyAuthentication
 
         app.Use(async (context, next) =>
         {
+            var path = context.Request.Path;
+            if (path.StartsWithSegments(ScalarPathPrefix) || path.StartsWithSegments(OpenApiPathPrefix))
+            {
+                await next(context);
+                return;
+            }
+
             var provided = context.Request.Headers[HeaderName].ToString();
 
             // Fixed-time comparison (docs/005 §5): a wrong key must not be
