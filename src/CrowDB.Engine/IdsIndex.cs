@@ -2,9 +2,12 @@ using System.Text;
 using System.Text.Json;
 using static CrowDB.Engine.Kind;
 
+using Id = string;
+using Offset = long;
+
 namespace CrowDB.Engine;
 
-public class IdsIndex : Dictionary<string, long>
+public class IdsIndex : Dictionary<Id, Offset>
 {
     public IdsIndex(string path)
     {
@@ -18,12 +21,12 @@ public class IdsIndex : Dictionary<string, long>
             this[record.Id] = offset;
     }
     
-    private static List<(Record record, long offset)> ReadAllFile(string path)
+    private static List<(Record record, Offset offset)> ReadAllFile(string path)
     {
         var allText = File.ReadAllText(path);
         var allLines = allText.Split("\n");
         var lastSumOffset = 0;
-        var records = new List<(Record record, long offset)>();
+        var records = new List<(Record record, Offset offset)>();
         
         foreach (var line in allLines)
         {

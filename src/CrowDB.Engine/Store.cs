@@ -6,12 +6,14 @@ namespace CrowDB.Engine;
 
 public sealed class Store : IDisposable
 {
-    private readonly FileStream _logFileStream;
+    private readonly string _path;
+    private FileStream _logFileStream;
     private readonly ILogger<Store> _logger;
     private readonly IdsIndex _idsIndex;
     
     public Store(string path, ILogger<Store> logger)
     {
+        _path = path;
         File.Open(path, FileMode.OpenOrCreate).Close();
         _logger = logger;
         _idsIndex = new IdsIndex(path);
@@ -81,7 +83,25 @@ public sealed class Store : IDisposable
     // macOS/Linux). The tests are red until this is implemented.
     public void Compact()
     {
-        throw new NotImplementedException();
+        lock (_logFileStream)
+        {
+            var compactFileName = $"crowdb_compact_{Guid.NewGuid()}.log";
+            var compactFilePath = _path.Replace(Constants.LogFilename, compactFileName);
+            var compactFileStream = File.Open(compactFilePath, FileMode.OpenOrCreate);
+            
+            foreach (var offset in _idsIndex.Values)
+            {
+                var recordSegment = _logFileStream.ReadRecordSegment(offset);
+                var record = Record.Decode(recordSegment);
+                compactFileStream.WriteRecord(record);
+            }
+            
+            compactFileStream.Close();
+            _logFileStream.Close();
+            
+            File.Move(compactFilePath, _path, overwrite: true);
+            _logFileStream = File.Open(_path, FileMode.OpenOrCreate);
+        }
     }
 
     public void Dispose()
