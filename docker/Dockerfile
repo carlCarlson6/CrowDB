@@ -41,10 +41,10 @@ COPY --from=build /out ./
 ENV ASPNETCORE_URLS=http://+:8080 \
     CrowDB__DataDirectory=/data
 
-# The engine's only writable spot. The image ships an "app" user; give the
+# The engine's only writable spot. Back it with a Railway Volume (or a Docker
+# -v mount when running locally). The image ships an "app" user; give the
 # directory to it and run as it — a database process has no business being root.
 RUN mkdir -p /data && chown app:app /data
-VOLUME /data
 USER app
 
 EXPOSE 8080
