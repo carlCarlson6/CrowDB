@@ -1,0 +1,7 @@
+# Build context for docker/Dockerfile — the context is the repo root, so this
+# file keeps the transfer small and the build deterministic.
+.git
+data
+portal
+**/bin
+**/obj
