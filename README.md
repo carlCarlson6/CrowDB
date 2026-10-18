@@ -41,6 +41,20 @@ The server logs what the store does to the console (`info: CrowDB.Engine.Store`)
 
 Data survives restarts: on startup the engine replays `data/crowdb.log` and rebuilds the id index in memory.
 
+## Deploying it
+
+Build the container image and run it with an API key:
+
+```bash
+docker/build.sh                                        # → crowdb-server:local
+export KEY=$(openssl rand -hex 32)
+docker run --rm -p 5217:8080 -e CrowDB__ApiKey="$KEY" -v crowdb-data:/data crowdb-server:local
+```
+
+Outside Development the server **refuses to start without `CrowDB:ApiKey`** — a deployment cannot silently run open. Every request then carries the key in the `X-Api-Key` header (`curl -H "X-Api-Key: $KEY" http://localhost:5217/docs`); missing or wrong keys get an empty `401`. Data lives at `/data` inside the container (the `crowdb-data` volume above), so it survives replacing the container. Keys over plain HTTP are only as private as the network — put TLS in front before using this anywhere real. Local development is unchanged: `dotnet run` in Development with no key configured serves openly, which is what the portal expects.
+
+Design record: [005 — API keys & the container image](docs/005-api-key-and-container.md).
+
 ## Roadmap (one concept per step)
 
 | Step | Feature | Concept introduced |
@@ -63,3 +77,5 @@ Data survives restarts: on startup the engine replays `data/crowdb.log` and rebu
 **Step 3 is complete.** `Store.Compact()` rewrites the log as only its live records and swaps it in with one atomic rename; one store-wide lock covers every operation, so writers, readers, and compaction can run at the same time without losing state. `POST /compact` exposes it (the portal has a Compact log button), and both suites are green (48 engine + 18 API tests). Design record: [003 — Step 3: compaction](docs/003-step-3-compaction-options.md).
 
 **Step 4's contract is written (red).** The log becomes v2: binary frames with declared lengths and a CRC32 (magic `CD`, version, kind, 16 MiB document cap), recovery keeps the valid prefix and truncates an invalid tail, and a v1 log is migrated to v2 in place — automatically, with the same atomic-rename dance as compaction. Design record: [004 — Step 4: binary format v2](docs/004-step-4-binary-format-v2.md). Both suites are extended and **fail until the engine implements it** — that is the contract-first workflow, not a broken build.
+
+**Deployment ready (2026-10-18).** An API key (`X-Api-Key`, config `CrowDB:ApiKey`) gates every endpoint whenever it is configured, compared in fixed time; a deployment that forgot the key refuses to start, while Development stays open for `dotnet run` and the portal. `docker/build.sh` builds a non-root server image with the data on a volume and the key supplied at run time (17 new API tests). Design record: [005 — API keys & the container image](docs/005-api-key-and-container.md).

@@ -1,12 +1,25 @@
+using System;
 using System.IO;
 using CrowDB.Engine;
 using CrowDB.Server;
 using CrowDB.Server.Endpoints;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// API key authentication (docs/005): the key is a deployment credential, so
+// outside Development it is mandatory — a deployment that forgot it must not
+// quietly serve everyone. Development may run open for `dotnet run` and the
+// portal; that case is warned about below.
+var apiKey = builder.Configuration["CrowDB:ApiKey"];
+if (string.IsNullOrWhiteSpace(apiKey) && !builder.Environment.IsDevelopment())
+    throw new InvalidOperationException(
+        "CrowDB:ApiKey is required outside the Development environment: every request must be " +
+        "authenticated. Set it (for example with the CROWDB__APIKEY environment variable) or " +
+        "run in Development.");
 
 // The engine keeps everything in one log file inside this directory. The value
 // in appsettings.json ("../../data") resolves to the repo-root data/ directory.
@@ -32,7 +45,17 @@ builder.Services
 // engine itself only knows the ILogger abstraction.
 var app = builder.Build();
 
+// UseApiKey is a no-op without a key; saying which mode the server is in
+// matters more than the middleware itself when something gets deployed.
+if (string.IsNullOrWhiteSpace(apiKey))
+    app.Logger.LogWarning(
+        "CrowDB:ApiKey is not set — every request is served without credentials. " +
+        "Set it to require the {Header} header.", ApiKeyAuthentication.HeaderName);
+else
+    app.Logger.LogInformation(
+        "API key authentication is enabled ({Header}).", ApiKeyAuthentication.HeaderName);
 
+app.UseApiKey(apiKey);
 
 app.MapCrowDbEndpoints();
 
