@@ -11,12 +11,10 @@ public static class GetDocs
         app.MapGet("/docs/{id}", GetDoc);
     }
 
-    private static IResult ListIds([FromServices] Store store) => Results.Ok(store.ListIds());
+    private static IResult ListIds(Store store) => Results.Ok(store.ListIds());
 
-    private static IResult GetDoc(
-        [FromServices] Store store, 
-        [FromRoute] string id
-    ) => store.TryGet(id, out var document)
-        ? Results.Bytes(document, "application/json")
-        : Results.NotFound(new { error = "document not found", id });
+    private static IResult GetDoc(Store store, string id) => 
+        store.TryGet(id, out var document)
+            ? Results.Bytes(document, "application/json")
+            : Results.NotFound(new { error = "document not found", id });
 }

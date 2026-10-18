@@ -16,12 +16,12 @@ public record Record(string Id, string Version, string Doc, string Kind = PUT)
 
         return new Record(
             Id:       docId,
-            Version:  Constants.ENCODE_VERSION,
+            Version:  Constants.EncodeVersion,
             Doc:      Encoding.UTF8.GetString(document.ToArray()),
             Kind:     PUT);
     }
     
-    public Record Delete() => this with { Kind = DELETE, Doc = Constants.DELETED_DOC};
+    public Record Delete() => this with { Kind = DELETE, Doc = Constants.DeletedDoc};
     
     public ReadOnlyMemory<byte> ToMemoryDoc() => Encoding.UTF8.GetBytes(Doc);
 
@@ -29,31 +29,6 @@ public record Record(string Id, string Version, string Doc, string Kind = PUT)
     {
         var record = JsonSerializer.Deserialize<Record>(recordBytes);
         return record ?? throw new Exception("empty record");
-    }
-
-    public static byte[] ReadRecordSegment(FileStream fileStream, long offset)
-    {
-        fileStream.Seek(offset, SeekOrigin.Begin);
-
-        using var record = new MemoryStream();
-        var chunk = new byte[4096];
-
-        while (true)
-        {
-            var read = fileStream.Read(chunk, 0, chunk.Length);
-            if (read == 0)                       // EOF, no '\n' seen
-                break;
-
-            var newline = Array.IndexOf(chunk, (byte)'\n', 0, read);
-            if (newline >= 0)
-            {
-                record.Write(chunk, 0, newline); // terminator excluded
-                break;
-            }
-            record.Write(chunk, 0, read);
-        }
-        
-        return record.ToArray();
     }
 
     public override string ToString() => JsonSerializer.Serialize(this);
@@ -64,6 +39,3 @@ public static class Kind
     public const string DELETE = "DELETE";
     public const string PUT = "PUT";
 }
-
-
-public record Metadata(string Collection = "");

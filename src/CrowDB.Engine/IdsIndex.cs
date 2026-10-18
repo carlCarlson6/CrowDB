@@ -12,12 +12,13 @@ public class IdsIndex : Dictionary<string, long>
         var records = allFile
             .GroupBy(x => x.record.Id)
             .Select(group => group
-                .MaxBy(y => y.offset));
+                .MaxBy(y => y.offset))
+            .Where(x => x.record.Kind != DELETE);
         foreach (var (record, offset) in records)
             this[record.Id] = offset;
     }
     
-    private List<(Record record, long offset)> ReadAllFile(string path)
+    private static List<(Record record, long offset)> ReadAllFile(string path)
     {
         var allText = File.ReadAllText(path);
         var allLines = allText.Split("\n");
@@ -30,13 +31,6 @@ public class IdsIndex : Dictionary<string, long>
             {
                 var record = JsonSerializer.Deserialize<Record>(line);
                 if (record is null) throw new Exception("Could not deserialize record");
-                if (record.Kind is DELETE)
-                {
-                    records = records
-                        .Where(x => x.record.Id != record.Id)
-                        .ToList();
-                    continue;
-                }
                 
                 records.Add((record, lastSumOffset));
             }

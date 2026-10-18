@@ -17,7 +17,7 @@ Directory.CreateDirectory(dataDirectory);
 
 // One store for the whole process: it owns the log file handle. Constructing
 // it replays the log and rebuilds the in-memory index (recovery).
-var logFile = Path.Combine(dataDirectory, Constants.LOG_FILENAME);
+var logFile = Path.Combine(dataDirectory, Constants.LogFilename);
 builder.Services
     .AddSingleton<Store>(sp => new Store(logFile, sp.GetRequiredService<ILogger<Store>>()));
 
@@ -36,4 +36,4 @@ app.Run();
 
 // The API tests (tests/CrowDB.Server.Tests) boot this program in-process with
 // WebApplicationFactory<Program>, which needs the entry point to be public.
-public partial class Program { }
+public partial class Program;

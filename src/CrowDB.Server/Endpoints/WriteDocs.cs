@@ -1,5 +1,4 @@
 using CrowDB.Engine;
-using Microsoft.AspNetCore.Mvc;
 
 namespace CrowDB.Server.Endpoints;
 

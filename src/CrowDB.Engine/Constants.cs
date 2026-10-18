@@ -1,8 +1,8 @@
 namespace CrowDB.Engine;
 
-public class Constants
+public static class Constants
 {
-    public const string LOG_FILENAME = "crowdb.log";
-    public const string ENCODE_VERSION = "1";
-    public const string DELETED_DOC = "--DELETED--";
+    public const string LogFilename = "crowdb.log";
+    public const string EncodeVersion = "1";
+    public const string DeletedDoc = "--DELETED--";
 }

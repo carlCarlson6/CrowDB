@@ -78,7 +78,7 @@ public class CompactionTests(ITestOutputHelper output)
         // and the tombstone are physically gone, not merely ignored.
         var log = File.ReadAllText(temp.LogFile);
         Assert.DoesNotContain("Ada", log, StringComparison.Ordinal);
-        Assert.DoesNotContain(Constants.DELETED_DOC, log, StringComparison.Ordinal);
+        Assert.DoesNotContain(Constants.DeletedDoc, log, StringComparison.Ordinal);
 
         using (var reopened = OpenStore(temp.LogFile, output))
         {
@@ -106,7 +106,7 @@ public class CompactionTests(ITestOutputHelper output)
         }
 
         var log = File.ReadAllText(temp.LogFile);
-        Assert.DoesNotContain(Constants.DELETED_DOC, log, StringComparison.Ordinal);
+        Assert.DoesNotContain(Constants.DeletedDoc, log, StringComparison.Ordinal);
         Assert.DoesNotContain("""{\u0022version\u0022:1}""", log, StringComparison.Ordinal);
         Assert.Contains("""{\u0022version\u0022:2}""", log, StringComparison.Ordinal);
 

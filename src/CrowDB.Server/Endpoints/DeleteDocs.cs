@@ -1,5 +1,4 @@
 using CrowDB.Engine;
-using Microsoft.AspNetCore.Mvc;
 
 namespace CrowDB.Server.Endpoints;
 
@@ -9,10 +8,7 @@ public static class DeleteDocs
         "/docs/{id}",
         Handler);
 
-    private static IResult Handler(
-        [FromRoute] string id,
-        [FromServices] Store store,
-        HttpRequest context)
+    private static IResult Handler(string id, Store store)
     {
         var result = store.Delete(id);
         return result

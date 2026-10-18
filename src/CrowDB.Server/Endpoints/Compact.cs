@@ -10,7 +10,7 @@ public static class Compact
 {
     public static void MapCompact(this WebApplication app) => app.MapPost("/compact", Handler);
 
-    private static IResult Handler([FromServices] Store store)
+    private static IResult Handler(Store store)
     {
         store.Compact();
         return Results.NoContent();

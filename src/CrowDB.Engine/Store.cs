@@ -25,14 +25,12 @@ public sealed class Store : IDisposable
             document = default;
             return false;
         }
-        
-        var recordSegment = Record.ReadRecordSegment(_logFileStream, offset);
+
+        var recordSegment = _logFileStream.ReadRecordSegment(offset);
         document = Record.Decode(recordSegment).ToMemoryDoc();
         
         return true;
     }
-    
-    public bool CheckExists(string id) => _idsIndex.ContainsKey(id);
     
     public void Put(string id, ReadOnlyMemory<byte> document)
     {
@@ -42,11 +40,7 @@ public sealed class Store : IDisposable
         
         lock (_logFileStream)  // TODO - duplicated on PUT - unify
         {
-            _logFileStream.Seek(0, SeekOrigin.End);
-            if (_logFileStream.Length > 0) _logFileStream.Write("\n"u8);
-            var offset = _logFileStream.Position;
-            _logFileStream.Write(record.Encode());
-            _logFileStream.Flush(true);
+            var offset = _logFileStream.WriteRecord(record);
             _idsIndex[id] = offset;
         }
     }
@@ -64,16 +58,12 @@ public sealed class Store : IDisposable
         {
             lock (_logFileStream)
             {
-                var recordSegment = Record.ReadRecordSegment(_logFileStream, offset);
-                var deletedRecord = Record.Decode(recordSegment).Delete().Encode();
+                var recordSegment = _logFileStream.ReadRecordSegment(offset);
+                var deletedRecord = Record
+                    .Decode(recordSegment)
+                    .Delete();
                 
-                
-                // TODO - duplicated on PUT - unify
-                _logFileStream.Seek(0, SeekOrigin.End);
-                if (_logFileStream.Length > 0) _logFileStream.Write("\n"u8);
-                _logFileStream.Write(deletedRecord);
-                _logFileStream.Flush(true);
-
+                _logFileStream.WriteRecord(deletedRecord);
                 _idsIndex.Remove(id);
             }
         }
