@@ -6,6 +6,7 @@ using CrowDB.Engine;
 using CrowDB.Server;
 using CrowDB.Server.Endpoints;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -84,6 +85,22 @@ builder.Services.AddOpenApi(options =>
 // from the host's service provider, so engine logs use that same pipeline — the
 // engine itself only knows the ILogger abstraction.
 var app = builder.Build();
+
+// Behind a reverse proxy — Railway's edge (docs/005) — Kestrel sees plain
+// HTTP and, potentially, an internal host: the edge terminates TLS and
+// *overwrites* X-Forwarded-Proto/-Host/-For with the truth (https, the public
+// domain). Without trusting them, the API reference would advertise an
+// http:// URL to an https:// page and the browser would block every "try it"
+// request as mixed content (docs/006 §4). Railway publishes no stable proxy
+// addresses, so the container trusts its immediate peer instead of a
+// known-network list; the edge replaces any copies a caller sent.
+var forwardedHeaders = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
+};
+forwardedHeaders.KnownNetworks.Clear();
+forwardedHeaders.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeaders);
 
 // UseApiKey is a no-op without a key; saying which mode the server is in
 // matters more than the middleware itself when something gets deployed.

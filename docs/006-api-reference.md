@@ -46,6 +46,8 @@ Server-side enforcement stays docs/005's middleware (fixed-time comparison, befo
 
 **As built: B.** `MapScalarApiReference()` serves `/scalar` (redirects to `/scalar/`; `/scalar/v1` names the document explicitly). The page's JavaScript is **embedded in the package and served by this process** — `/scalar/scalar.js`, `/scalar/scalar.aspnetcore.js`, `/scalar/favicon.svg` — so there is no CDN and the reference works offline and inside the container. The HTML carries the document's route (relative, `openapi/v1.json`) and the client fetches it in the browser.
 
+The document also carries a `servers` entry — the URL the browser sends the "try it" requests to. It is derived from the incoming request (scheme + host), so behind a proxy the forwarded headers must be trusted: `Program.cs` enables the forwarded-headers middleware (`X-Forwarded-Proto`, `X-Forwarded-Host`, known networks cleared) because Railway's edge terminates TLS, **overwrites** both headers, and publishes no stable proxy addresses. Without it, the `https://…/scalar` page would be handed an `http://…` server URL and the browser would block every request as mixed content — which is exactly how the first Railway test of the reference failed. Locally the headers never appear, so nothing changes.
+
 ## 5. Declaring the body switches on content-type validation
 
 `.Accepts<JsonElement>("application/json")` is what gives the two write operations a request-body editor in the UI. In .NET 10 the same metadata is also *enforced*: a request whose `Content-Type` is not `application/json` is answered **415 before the handler reads anything**. Before this change, any content type was read raw and only non-JSON *bytes* were answered 400.
@@ -64,7 +66,7 @@ Server-side enforcement stays docs/005's middleware (fixed-time comparison, befo
 
 ## 7. The contract (test map)
 
-`tests/CrowDB.Server.Tests` — 10 new cases through the real server in-process:
+`tests/CrowDB.Server.Tests` — 11 new cases through the real server in-process:
 
 | Case | Proves |
 |---|---|
@@ -74,6 +76,7 @@ Server-side enforcement stays docs/005's middleware (fixed-time comparison, befo
 | declared status codes per operation; one `<response>` description | the metadata and comment texts land where they should |
 | key configured → `ApiKeyAuth` scheme (apiKey/header/`X-Api-Key`) + global requirement | the auth panel appears in deployments |
 | no key → no `security`/`securitySchemes` | the document describes the server it is served by |
+| `X-Forwarded-Proto`/`-Host` on the document request → the `servers` URL is the public `https` one | the reference works behind Railway's proxy (no mixed content) |
 | `/scalar` → HTML that references `openapi/v1.json` | the UI page works end to end |
 | the page's scripts → 200 JavaScript **from this host** | embedded bundle, no CDN |
 | `ApiKeyAuthTests`: `/scalar` and `/openapi/v1.json` → 200 without the key in Production; `/scalar-extra` and `/docs` → 401 | public reference, gated API, segment-exact matching |
@@ -82,12 +85,13 @@ Server-side enforcement stays docs/005's middleware (fixed-time comparison, befo
 ## 8. What it changes
 
 - **New:** `docs/006-api-reference.md` (this record), `tests/CrowDB.Server.Tests/OpenApiDocsTests.cs`.
-- **Changed:** `CrowDB.Server.csproj` (two packages, `GenerateDocumentationFile`), `Program.cs` (`AddOpenApi`; the security-scheme transformer runs only when a key is configured), `WebAppExtensions.cs` (maps the reference routes, excludes the banner, keeps the handler rule next to the mapping), `ApiKeyAuthentication.cs` (the public prefixes + the scheme name), the endpoint files (handlers public, XML comments, `Produces`/`Accepts` metadata), `DocsApiTests.cs` (415 case, empty-body case), `ApiKeyAuthTests.cs` (the exemption case), `README.md`, `AGENTS.md`.
+- **Changed:** `CrowDB.Server.csproj` (two packages, `GenerateDocumentationFile`), `Program.cs` (`AddOpenApi`; the security-scheme transformer runs only when a key is configured; forwarded-headers middleware for proxied deployments), `WebAppExtensions.cs` (maps the reference routes, excludes the banner, keeps the handler rule next to the mapping), `ApiKeyAuthentication.cs` (the public prefixes + the scheme name), the endpoint files (handlers public, XML comments, `Produces`/`Accepts` metadata), `DocsApiTests.cs` (415 case, empty-body case), `ApiKeyAuthTests.cs` (the exemption case), `README.md`, `AGENTS.md`.
 - **Unchanged:** the engine (web-free as ever), the on-disk format, the routing itself, the portal, the Docker files.
 
 ## 9. Decisions you will meet
 
 - **The reference is public; the data is not.** Anyone who can reach the port can read the API description — and still gets an empty 401 from every data route without the key. If the deployment's very existence must be secret, put auth in front of the whole host.
+- **Behind a proxy, the document follows the edge.** The `servers` URL is request-derived, so the server honors `X-Forwarded-Proto`/`-Host` (trusting the immediate peer — Railway publishes no stable proxy IPs and its edge overwrites the headers). An `https://` page handed an `http://` URL gets its browser requests blocked as mixed content; that is the failure this middleware fixes, not a CORS one.
 - **415 now exists.** Write operations answer 415 for a non-JSON `Content-Type` and 400 for JSON-declared bodies that are not JSON. Both are per-handler truth, declared in the document.
 - **The document's title/version are the defaults** (`CrowDB.Server | v1`, `1.0.0`). Custom info, logos and themes are later decisions.
 - **401 responses are not declared per operation.** The gate is deployment infrastructure that runs before routing (docs/005); it stays prose, not OpenAPI.

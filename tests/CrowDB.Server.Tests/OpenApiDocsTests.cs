@@ -146,6 +146,27 @@ public class OpenApiDocsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task GIVEN_a_request_that_came_through_a_proxy_WHEN_reading_the_document_THEN_the_server_url_uses_the_forwarded_scheme_and_host()
+    {
+        // On Railway the edge terminates TLS and calls the container over
+        // plain HTTP (docs/006 §4): without honoring the forwarded headers the
+        // document would advertise an http:// URL to an https:// page, and the
+        // browser would block every "try it" request as mixed content.
+        using var server = new CrowDbServer(output);
+        using var client = server.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, DocumentUrl);
+        request.Headers.Add("X-Forwarded-Proto", "https");
+        request.Headers.Add("X-Forwarded-Host", "crowdb.up.railway.app");
+
+        var response = await client.SendAsync(request);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            "https://crowdb.up.railway.app/",
+            document.RootElement.GetProperty("servers")[0].GetProperty("url").GetString());
+    }
+
+    [Fact]
     public async Task GIVEN_a_browser_WHEN_opening_the_scalar_ui_THEN_the_page_is_served_and_points_at_the_document()
     {
         using var server = new CrowDbServer(output);
